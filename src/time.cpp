@@ -1,0 +1,81 @@
+#include "time.hpp"
+
+static DaySeconds _dayseconds_offset = 0;
+
+DaySeconds get_dayseconds(){
+    return DaySeconds(seconds()%86400) + _dayseconds_offset;
+}
+
+void calibrate_dayseconds(const DaySeconds& now){
+    _dayseconds_offset = now-DaySeconds(seconds()%86400);
+}
+
+#if FW_SERVER
+
+RTC_DS3231 rtc;
+
+RTC_DATA_ATTR static bool sleep_interval_array_is_loaded = false;
+RTC_DATA_ATTR SleepInterval sleep_interval_array[sleep_interval_array_size];
+
+void load_sleep_intervals(){
+    if (sleep_interval_array_is_loaded) return;
+    log_i("Loading sleep interval array");
+    eeprom.readBuffer(sleep_interval_eeprom_address, 
+        reinterpret_cast<uint8_t*>(sleep_interval_array),
+        sleep_interval_array_size*8
+    );
+    sleep_interval_array_is_loaded = true;
+}
+
+void store_sleep_intervals(){
+    log_i("Storing sleep interval array");
+    eeprom.writeBuffer(sleep_interval_eeprom_address,
+        reinterpret_cast<uint8_t*>(sleep_interval_array),
+        sleep_interval_array_size*8
+    );
+}
+
+SleepInterval* find_in_progress_interval(const DaySeconds& now){
+    for (uint8_t i=0;i<sleep_interval_array_size;i++){
+        SleepInterval* si = sleep_interval_array+i;
+        if (si->is_available()&&si->in_progress(now)){
+            return si;
+        }
+    }
+    return nullptr;
+}
+
+SleepInterval* find_next_sleep_interval(const DaySeconds& now){
+    SleepInterval* min_si = nullptr;
+    for (uint8_t i=0;i<sleep_interval_array_size;i++){
+        SleepInterval* si = sleep_interval_array+i;
+        if (si->is_available()&&now<si->start_sec){
+            if (min_si){
+                if (si->start_sec<min_si->start_sec){
+                    min_si = si;
+                }
+            }
+            else {
+                min_si = si;
+            }
+        }
+    }
+    return min_si;
+}
+
+void init_rtc(){
+    log_i("Init RTC");
+    if (!rtc.begin(&Wire)){
+        log_e("Init RTC failed");
+        ESP_ERROR_CHECK(EXC_INIT_RTC_FAILED);
+    }
+    if (rtc.lostPower()){
+        log_w("RTC lost power");
+    }
+    // 校准 DaySeconds 偏移
+    auto now = rtc.now();
+    calibrate_dayseconds(now.secondstime()%86400);
+}
+
+#else
+#endif

@@ -1,0 +1,13 @@
+*.o
+*.i
+*.a
+*.hex
+*.elf
+*.out
+*.bin
+*.app-bin
+build/
+.vscode/
+arduinocli_config.cfg
+*.log
+legacy/
