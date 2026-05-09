@@ -6,6 +6,8 @@
 #include <at24c32.h>
 #include <Wire.h>
 
+#define BITMASK(__mask) (1ULL<<static_cast<uint32_t>(__mask))
+
 extern AT24C32 eeprom;
 
 inline void led(bool state){

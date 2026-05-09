@@ -19,7 +19,7 @@
 
 static_assert(sizeof(int)==4,"arch error");
 
-#define FIRMWARE_VERSION 20260504
+#define FIRMWARE_VERSION 26050902
 
 /* Board: ESP32-C3 SuperMini/ProMini
    _____________
@@ -40,6 +40,7 @@ enum {
     FWPIN_FUNCT=2,  // WAKEUP
 
 #if FW_SERVER
+    FWPIN_SW_ALWAY_ENABLE=4,
     FWPIN_BTN_BEGIN_CLI=5,    // 需要 10k 上拉电阻防止误触发
 #else
 #endif

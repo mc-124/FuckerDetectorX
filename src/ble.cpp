@@ -45,6 +45,16 @@ void init_ble(){
 #endif
 }
 
+void deinit_ble(){
+    log_i("Deinit BLE");
+    BLEDevice::deinit(true);
+    p_bleserver = nullptr;
+    p_bleadvertising = nullptr;
+#if !FW_SERVER
+    p_blescan = nullptr;
+#endif
+}
+
 void set_advertising_data(const AdvertisingData& data){
     if (!p_bleadvertising){
         log_e("set_advertising_data: p_bleadvertising is nullptr");

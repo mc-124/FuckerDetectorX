@@ -12,6 +12,12 @@
 #include <RTClib.h>
 #endif
 
+#ifdef USE_DS1307
+#define RTC_MODULE RTC_DS1307
+#else
+#define RTC_MODULE RTC_DS3231
+#endif
+
 class DaySeconds {
     private:
     int __dayseconds;
@@ -48,7 +54,7 @@ void calibrate_dayseconds(const DaySeconds& now);
 
 #if FW_SERVER
 
-extern RTC_DS3231 rtc;
+extern RTC_MODULE rtc;
 
 struct SleepInterval {
     DaySeconds start_sec;

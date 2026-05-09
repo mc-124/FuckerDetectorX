@@ -38,6 +38,7 @@ extern AdvertisingDevCallbacks advdev_callbacks;
 #endif
 
 void init_ble();
+void deinit_ble();
 void set_advertising_data(const AdvertisingData& data);
 void start_advertising();
 void stop_advertising();

@@ -12,7 +12,7 @@ void calibrate_dayseconds(const DaySeconds& now){
 
 #if FW_SERVER
 
-RTC_DS3231 rtc;
+RTC_MODULE rtc;
 
 RTC_DATA_ATTR static bool sleep_interval_array_is_loaded = false;
 RTC_DATA_ATTR SleepInterval sleep_interval_array[sleep_interval_array_size];
@@ -69,9 +69,11 @@ void init_rtc(){
         log_e("Init RTC failed");
         ESP_ERROR_CHECK(EXC_INIT_RTC_FAILED);
     }
+#ifndef USE_DS1307
     if (rtc.lostPower()){
         log_w("RTC lost power");
     }
+#endif
     // 校准 DaySeconds 偏移
     auto now = rtc.now();
     calibrate_dayseconds(now.secondstime()%86400);
