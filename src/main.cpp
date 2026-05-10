@@ -194,6 +194,7 @@ namespace cmd_handler {
 
 void transmit_advertising(AdvertisingType type, DaySeconds now=get_dayseconds()){
     AdvertisingData data = {
+        .company_id = adv_company_id,
         .type = type,
         .battery_voltage = read_battery_voltage(),
         .now = now
@@ -292,6 +293,48 @@ void server_setup(bool reset_cause_is_deepsleep){
 }
 
 #else
+
+TaskHandle_t task_alarm;
+
+void tfunc_alarm(void* p){
+    log_i("alarm task created");
+    for (;;){
+        xTaskNotifyWait(0,0,NULL,portMAX_DELAY);
+        for (uint8_t i=0;i<3;i++){
+            digitalWrite(FWPIN_EN_DEV,1);
+            delay(600);
+            digitalWrite(FWPIN_EN_DEV,0);
+            delay(200);
+        }
+    }
+}
+
+inline void activate_alarm(){
+    xTaskNotify(task_alarm, NULL, eNoAction);
+}
+
+void AdvertisingDevCallbacks::onResult(BLEAdvertisedDevice dev) {
+    if (dev.haveName()&&dev.haveManufacturerData()){
+        auto name = dev.getName();
+        auto data = dev.getManufacturerData();
+        if ((name==ble_client_name||name==ble_server_name)&&data.length()==sizeof(AdvertisingData)){
+            log_i("found transmitter");
+            AdvertisingData advdata;
+            uint8_t* p_advdata = reinterpret_cast<uint8_t*>(&advdata);
+            // copy
+            for (uint8_t byte:data) *(p_advdata++) = byte;
+            // check
+            if (advdata.company_id!=adv_company_id){
+                return;
+            }
+            auto addrstr = dev.getAddress().toString().c_str();
+            log_i("transmitter: mac=%s vbat=%.2f type=%hhu", addrstr, advdata.battery_voltage, static_cast<uint8_t>(advdata.type));
+            activate_alarm();
+            /// @todo 把设备信息给UI渲染函数
+        }
+    }
+}
+
 #endif
 
 void setup(){
@@ -364,6 +407,8 @@ void setup(){
     else {
         server_setup(false);
     }
+#else
+    xTaskCreate(tfunc_alarm, "alarmtask", 384, NULL, 1, &task_alarm);
 #endif
 }
 
@@ -371,6 +416,6 @@ void setup(){
 void loop(){}
 #else
 void loop(){
-
+    /// @todo UI渲染逻辑
 }
 #endif

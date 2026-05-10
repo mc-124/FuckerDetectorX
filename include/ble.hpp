@@ -20,9 +20,10 @@ enum class AdvertisingType:uint8_t {
 };
 
 struct AdvertisingData {
-    AdvertisingType type;
+    uint16_t company_id;
+    AdvertisingType type;   // enum class:uint8_t
     float battery_voltage;
-    DaySeconds now;
+    DaySeconds now;         // 4b
 };
 
 #if FW_SERVER

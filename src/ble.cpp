@@ -1,17 +1,10 @@
 #include "ble.hpp"
 
-
-
-
 #if FW_SERVER
-
-
-
-
 #else
 
 BLEScan* p_blescan = nullptr;
-AdvertisingDevCallbacks advdev_callbacks + AdvertisingDevCallbacks();
+AdvertisingDevCallbacks advdev_callbacks = AdvertisingDevCallbacks();
 
 #endif
 
@@ -20,7 +13,6 @@ uint16_t adv_min_interval = 0;
 
 BLEServer* p_bleserver = nullptr;
 BLEAdvertising* p_bleadvertising = nullptr;
-
 
 static void generate_advertising_intervals(){
     uint8_t macbuf[6];
@@ -41,7 +33,9 @@ void init_ble(){
     p_bleadvertising->setMinInterval(adv_min_interval);
 #if FW_SERVER
 #else
-    p_scan = BLEDevice::getScan();
+    p_blescan = BLEDevice::getScan();
+    //p_blescan->setActiveScan(true);
+    p_blescan->setAdvertisedDeviceCallbacks(&advdev_callbacks);
 #endif
 }
 
@@ -63,8 +57,10 @@ void set_advertising_data(const AdvertisingData& data){
     const char* buf = reinterpret_cast<const char*>(&data);
     BLEAdvertisementData bleadvdata;
     bleadvdata.setName(ble_device_name);
-    bleadvdata.addData(String(buf,sizeof(AdvertisingData)));
+    //bleadvdata.addData(String(buf,sizeof(AdvertisingData)));
+    bleadvdata.setManufacturerData(String(buf,sizeof(AdvertisingData)));
     p_bleadvertising->setAdvertisementData(bleadvdata);
+    
 }
 
 void start_advertising(){
@@ -82,8 +78,3 @@ void stop_advertising(){
     }
     p_bleadvertising->stop();
 }
-
-#if FW_SERVER
-#else
-
-#endif

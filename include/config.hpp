@@ -53,12 +53,15 @@ enum {
     FWPIN_UART_TX=21,
 };
 
+constexpr char ble_server_name[] = "FuckerDetectorX Server";
+constexpr char ble_client_name[] = "FuckerDetectorX Client";
+
 #if FW_SERVER
 
 constexpr uint8_t sleep_interval_array_size = 16;
 constexpr uint8_t eeprom_iic_address = 0x50;
 constexpr uint16_t sleep_interval_eeprom_address = 0xeff;
-constexpr auto ble_device_name = "FuckerDetectorX Server";
+constexpr auto ble_device_name = ble_server_name;
 constexpr uint32_t ld1040_init_time = 7500; // ms
 constexpr char datetime_format[] = "YYYY-MM-DD hh:mm:ss";
 
@@ -69,11 +72,12 @@ static_assert(
 
 #else
 
-constexpr auto ble_device_name = "FuckerDetectorX Client";
+constexpr auto ble_device_name = ble_client_name;
 constexpr uint8_t ssd1306_i2c_address = 0x3c;
 
 #endif
 
+constexpr size_t adv_company_id = 0xff23;
 constexpr size_t cmd_operator_bufsize = 15;
 constexpr size_t cmd_paramlist_bufsize = 4;
 constexpr size_t cmd_param_bufsize = 15;
