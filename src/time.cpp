@@ -24,6 +24,14 @@ void load_sleep_intervals(){
         reinterpret_cast<uint8_t*>(sleep_interval_array),
         sleep_interval_array_size*8
     );
+    for (uint8_t index=0;index<sleep_interval_array_size;index++){
+        SleepInterval& si = sleep_interval_array[index];
+        if (!(0<=int(si.start_sec)&&int(si.start_sec)<=86400)||!(0<=int(si.end_sec)&&int(si.end_sec)<=86400)){
+            log_w("[%hhu] invalid sleep interval");
+            si.start_sec = 0;
+            si.end_sec = 0;
+        }
+    }
     sleep_interval_array_is_loaded = true;
 }
 

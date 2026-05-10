@@ -59,6 +59,8 @@ constexpr uint8_t sleep_interval_array_size = 16;
 constexpr uint8_t eeprom_iic_address = 0x50;
 constexpr uint16_t sleep_interval_eeprom_address = 0xeff;
 constexpr auto ble_device_name = "FuckerDetectorX Server";
+constexpr uint32_t ld1040_init_time = 7500; // ms
+constexpr char datetime_format[] = "YYYY-MM-DD hh:mm:ss";
 
 static_assert(
     sleep_interval_eeprom_address+(sleep_interval_array_size*8)<4096,
@@ -78,4 +80,3 @@ constexpr size_t cmd_param_bufsize = 15;
 constexpr size_t cmd_handler_maxcount = 16;
 constexpr uint32_t rtos_task_stack_size = 1280; // 单位word
 constexpr uint32_t advertising_timeout = 2500; // ms
-constexpr uint32_t ld1040_init_time = 7500; // ms

@@ -52,20 +52,32 @@ static void command_handler(){
     }
 }
 
+inline static void __backspace(){
+    Serial.print("\b \b");
+}
+
 void command_receiver(){
     int byte = Serial.read();
     if (byte==-1){
         return;
     }
-    else if (byte==KB_CTRL_C){
+    else if (byte==KB_CTRL_C||byte==27){
         if (cmdrcvflags!=CmdRcvFlags::NO_COMMAND){
             reset_command_receiver();
-            Serial.println(" ^C");
+            Serial.println("\r\nRESET");
+            return;
         }
     }
     else if (byte=='\r'){
         return;
     }
+    // /// @test serial
+    // Serial.printf("Serial.read -> %d\n", byte);
+    /*
+        27: Esc
+        127: Backspace
+    */
+    /// @note 有些串口工具似乎不会发送Enter，所以添加Tab等价于Enter
     switch (cmdrcvflags){
         case CmdRcvFlags::NO_COMMAND:
             if (byte=='/'){
@@ -76,21 +88,23 @@ void command_receiver(){
         case CmdRcvFlags::OPERATOR:
             if (is_valid_char(byte)){
                 if (command_operator_length<cmd_operator_bufsize){
-                    Serial.print(byte);
+                    Serial.print(static_cast<char>(byte));
                     command_operator_buffer[
                         command_operator_length++
                     ] = byte;
                 }
             }
-            else if (byte=='\b'){ // backspace
+            else if (byte=='\b'||byte==0x7f){ // backspace
                 if (command_operator_length){
-                    Serial.print('\b');
+                    //Serial.print('\b');
+                    __backspace();
                     command_operator_buffer[
                         --command_operator_length
                     ] = 0;
                 }
                 else {
-                    Serial.print('\b');
+                    //Serial.print('\b');
+                    __backspace();
                     reset_command_receiver();
                 }
             }
@@ -101,7 +115,7 @@ void command_receiver(){
                     Serial.print(' ');
                 }
             }
-            else if (byte=='\n'){ // end
+            else if (byte=='\n'||byte=='\t'){ // end
                 if (command_operator_length){
                     Serial.println();
                     command_handler();
@@ -114,18 +128,20 @@ void command_receiver(){
                 size_t& param_len = command_paramlist_length[command_param_count-1];
                 if (param_len<cmd_param_bufsize){
                     command_paramlist_buffer[command_param_count-1][param_len++] = byte;
-                    Serial.print(byte);
+                    Serial.print(static_cast<int>(byte));
                 }
             }
-            else if (byte=='\b'){
+            else if (byte=='\b'||byte==0x7f){
                 size_t& param_len = command_paramlist_length[command_param_count-1];
                 if (param_len){
                     command_paramlist_buffer[command_param_count-1][--param_len] = 0;
-                    Serial.print('\b');
+                    //Serial.print('\b');
+                    __backspace();
                 }
                 else {
                     command_param_count--;
-                    Serial.print('\b');
+                    //Serial.print('\b');
+                    __backspace();
                     if (!command_param_count){
                         cmdrcvflags = CmdRcvFlags::OPERATOR;
                     }
@@ -137,7 +153,7 @@ void command_receiver(){
                     Serial.print(' ');
                 }
             }
-            else if (byte=='\n'){
+            else if (byte=='\n'||byte=='\t'){
                 Serial.println();
                 command_handler();
                 reset_command_receiver();
