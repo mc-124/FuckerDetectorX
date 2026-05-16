@@ -1,0 +1,26 @@
+# 只剩下代码的.gitignore
+# 给 cloc、codeflow 之类的东西用的
+
+*.o
+*.i
+*.a
+*.hex
+*.elf
+*.out
+*.bin
+*.app-bin
+build/
+.vscode/
+arduinocli_config.cfg
+*.log
+legacy/
+
+*.md
+*.sh
+build_config/
+*.json
+.gitignore
+.codeignore
+*.cfg
+*.toml
+*.bat

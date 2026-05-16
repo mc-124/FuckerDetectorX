@@ -36,6 +36,7 @@ void init_ble(){
     p_blescan = BLEDevice::getScan();
     //p_blescan->setActiveScan(true);
     p_blescan->setAdvertisedDeviceCallbacks(&advdev_callbacks);
+    p_blescan->setInterval(scan_interval);
 #endif
 }
 
@@ -60,7 +61,6 @@ void set_advertising_data(const AdvertisingData& data){
     //bleadvdata.addData(String(buf,sizeof(AdvertisingData)));
     bleadvdata.setManufacturerData(String(buf,sizeof(AdvertisingData)));
     p_bleadvertising->setAdvertisementData(bleadvdata);
-    
 }
 
 void start_advertising(){
@@ -77,4 +77,39 @@ void stop_advertising(){
         return;
     }
     p_bleadvertising->stop();
+}
+
+void init_advertising_data(AdvertisingData& data, const AdvertisingType type){
+    data.company_id = adv_company_id;
+    data.type = type;
+#if FW_SERVER
+    float vbat = read_battery_voltage();
+    int vbat_d = 0;
+    if (3.0<=vbat&&vbat<=4.3){
+        vbat_d = (vbat - 2.0) * 100;
+    }
+    if (vbat_d>255){
+        vbat_d = 255;
+    }
+    else if (vbat_d<0){
+        vbat_d = 0;
+    }
+    data.battery_voltage = vbat_d;
+    data.now = get_dayseconds();
+#else
+    data.battery_voltage = 0;
+    data.now = 0;
+#endif
+}
+
+void bleaddr_tostrbuf(BLEAddress& addr, char* buf){
+    constexpr char abc[17] = "0123456789ABCDEF";
+    uint8_t* bytes = addr.getNative();
+    for (uint8_t i=0;i<6;i++){
+        int_to_string_buf(*(bytes++), &buf);
+        if (i!=5){
+            *(buf++) = ':';
+        }
+    }
+    *(buf++) = 0;
 }

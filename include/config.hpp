@@ -3,47 +3,55 @@
 #define __PreCompile_Stringify(__x) #__x
 #define STRINGIFY(__s) __PreCompile_Stringify(__s)
 
+#include <cstdint>
+#include <cassert>
+#include <Arduino.h>
+
+#ifdef __CONFIGHPP_PRINT_INFO
 #pragma message("__cplusplus: " STRINGIFY(__cplusplus))
 #pragma message("CORE_DEBUG_LEVEL: " STRINGIFY(CORE_DEBUG_LEVEL))
+#pragma message("ARDUINO: " STRINGIFY(ARDUINO))
+#pragma message("ESP_IDF_VERSION: " STRINGIFY(ESP_IDF_VERSION_MAJOR) "." STRINGIFY(ESP_IDF_VERSION_MINOR) "." STRINGIFY(ESP_IDF_VERSION_PATCH))
+
+#endif
 
 #if !defined(__cplusplus)||__cplusplus<202300
 #error __cplusplus must >= c++23
 #endif
 
-#include <cstdint>
-#include <cassert>
-
 #ifndef FW_SERVER
+#warning FW_SERVER is undefined
 #define FW_SERVER 1
 #endif
 
 static_assert(sizeof(int)==4,"arch error");
 
-#define FIRMWARE_VERSION 26050902
+// Year[2] Month[2] Day[2] SubVersion[2]
+#define FIRMWARE_VERSION 26051600
 
 /* Board: ESP32-C3 SuperMini/ProMini
    _____________
-  |5V       IO5 |
-  |GND      IO6 |
-  |3V3      IO7 |
-  |IO4      IO8 |
-  |IO3      IO9 |
-  |IO2      IO10|
-  |IO1      IO20|
-  |IO0      IO21|
+  |IO5       5V |
+  |IO6       GND|
+  |IO7       3V3|
+  |IO8       IO4|
+  |IO9       IO3|
+  |IO10      IO2|
+  |IO20      IO1|
+  |IO21      IO0|
    ^^^^^^^^^^^^^
 */
 
 enum {
     FWPIN_VBAT=0,   // ADC
-    FWPIN_EN_DEV=1, // HOLD
-    FWPIN_FUNCT=2,  // WAKEUP
-
+    FWPIN_FUNCT=1,  // WAKEUP SOURCE
+    // pin 2: strapping
+    FWPIN_BTN_BEGIN_CLI=3,    // 需要 10k 上拉电阻防止误触发
 #if FW_SERVER
     FWPIN_SW_ALWAY_ENABLE=4,
-    FWPIN_BTN_BEGIN_CLI=5,    // 需要 10k 上拉电阻防止误触发
 #else
 #endif
+    FWPIN_EN_DEV=5, // HOLD
     FWPIN_IIC_SDA=6,
     FWPIN_IIC_SCL=7,
     FWPIN_LED=8,
@@ -53,8 +61,9 @@ enum {
     FWPIN_UART_TX=21,
 };
 
-constexpr char ble_server_name[] = "FuckerDetectorX Server";
-constexpr char ble_client_name[] = "FuckerDetectorX Client";
+constexpr char ble_server_name[] = "FuckerDetectorX";
+//constexpr char ble_client_name[] = "FuckerDetectorX";
+#define ble_client_name ble_server_name
 
 #if FW_SERVER
 
@@ -74,6 +83,11 @@ static_assert(
 
 constexpr auto ble_device_name = ble_client_name;
 constexpr uint8_t ssd1306_i2c_address = 0x3c;
+constexpr uint32_t scan_interval = 48;
+constexpr uint32_t scanner_task_stack_size = 8192; // word
+constexpr uint32_t alarm_task_stack_size = 384;
+constexpr uint8_t found_ble_device_array_length = 6;
+constexpr uint32_t ui_task_stack_size = 2560;
 
 #endif
 

@@ -1,3 +1,5 @@
+#define __CONFIGHPP_PRINT_INFO
+
 #include <Arduino.h>
 
 #include <freertos/queue.h>
@@ -19,9 +21,13 @@
 #include <cstring>
 #include <cerrno>
 
+static_assert(ARDUHAL_LOG_LEVEL!=ARDUHAL_LOG_LEVEL_NONE,"log level error");
+
 RTC_DATA_ATTR uint32_t chip_boot_counter = 0;
 
-#define DEF_CMD_HANDLER(__funcname) void __funcname (size_t param_count, const CommandHandlerFuncParams& params)
+#pragma region Commands
+
+#define DEF_CMD_HANDLER(__funcname) static void __funcname (size_t param_count, const CommandHandlerFuncParams& params)
 #define CMD_CHK_LEN(__len) if(param_count!=__len){log_e("syntax error: param count error");return;}
 #define CMD_PARSE_INT_PARAM(__pindex) \
     char* param##__pindex##_str = command_paramlist_buffer[__pindex];\
@@ -39,10 +45,11 @@ namespace cmd_handler {
         esp_restart();
     }
     DEF_CMD_HANDLER(help){
+        CMD_CHK_LEN(0);
         Serial.println(
             "/exit\r\n"
             "/help\r\n"
-            "/getvbat\r\n"
+            "/info\r\n"
 #if FW_SERVER
             "/setdate <year> <month> <day>\r\n"
             "/settime <hour> <minute> <second>\r\n"
@@ -55,10 +62,39 @@ namespace cmd_handler {
 #endif
         );
     }
-    DEF_CMD_HANDLER(getvbat){
+    DEF_CMD_HANDLER(info){
         CMD_CHK_LEN(0);
+        if constexpr(FW_SERVER){
+            Serial.println("type: server");
+        }
+        else {
+            Serial.println("type: client");
+        }
+        Serial.println("version: " STRINGIFY(FIRMWARE_VERSION));
+        if constexpr(ARDUHAL_LOG_LEVEL==ARDUHAL_LOG_LEVEL_DEBUG){
+            Serial.println("log level: debug");
+        }
+        else if constexpr(ARDUHAL_LOG_LEVEL==ARDUHAL_LOG_LEVEL_INFO){
+            Serial.println("log level: info");
+        }
+        else if constexpr(ARDUHAL_LOG_LEVEL==ARDUHAL_LOG_LEVEL_WARN){
+            Serial.println("log level: warn");
+        }
+        else if constexpr(ARDUHAL_LOG_LEVEL==ARDUHAL_LOG_LEVEL_VERBOSE){
+            Serial.println("log level: verbose");
+        }
+        else {
+            Serial.println("log level: error");
+        }
+        Serial.println("compile time: " __TIMESTAMP__);
         float vbat = read_battery_voltage();
         Serial.printf("battery voltage: %.2f\r\n", vbat);
+        Serial.println("arduino version: " STRINGIFY(ARDUINO));
+        Serial.println("sdk version: " 
+            STRINGIFY(ESP_IDF_VERSION_MAJOR) "."
+            STRINGIFY(ESP_IDF_VERSION_MINOR) "."
+            STRINGIFY(ESP_IDF_VERSION_PATCH)
+        );
     }
 #if FW_SERVER
     char __datetime_buffer[32] = {0};
@@ -192,19 +228,64 @@ namespace cmd_handler {
 #undef CMD_CHK_LEN
 #undef CMD_PARSE_INT_PARAM
 
+#pragma endregion
+
+#if !FW_SERVER
+SemaphoreHandle_t ble_lock;
+SemaphoreHandle_t devlst_lock;
+SemaphoreHandle_t devcli_lock;
+TaskHandle_t task_alarm;
+TaskHandle_t task_scanner;
+TaskHandle_t task_ui;
+
+struct ServerInfo {
+    uint8_t mac_end[2];
+    AdvertisingType type;
+    char rssi;
+    float battery_voltage;
+    bool empty;
+    DaySeconds time;
+
+    inline void clear(){
+        this->mac_end[0] = 0;
+        this->mac_end[1] = 0;
+        this->type = AdvertisingType::SERVER_ALARM;
+        this->rssi = 0;
+        this->battery_voltage = 0.0;
+        this->empty = true;
+        this->time = 0;
+    }
+};
+
+ServerInfo found_ble_devices[found_ble_device_array_length]; // devlst_lock
+ServerInfo found_ble_client_device; // devcli_lock
+uint8_t found_ble_device_count = 0;
+bool round_founded = false; // 扫描冷却
+
+#endif
+
 void transmit_advertising(AdvertisingType type, DaySeconds now=get_dayseconds()){
-    AdvertisingData data = {
-        .company_id = adv_company_id,
-        .type = type,
-        .battery_voltage = read_battery_voltage(),
-        .now = now
-    };
+    AdvertisingData data;
+    init_advertising_data(data, type);
+
+#if !FW_SERVER
+    p_blescan->stop();
+    xSemaphoreTake(ble_lock, portMAX_DELAY);
+    log_i("start advertising");
+#endif
+
     set_advertising_data(data);
     start_advertising();
     delay(advertising_timeout);
     stop_advertising();
+
+#if !FW_SERVER
+    log_i("stop advertising");
+    xSemaphoreGive(ble_lock);
+#endif
 }
 
+#pragma region SpecialFuncs
 #if FW_SERVER
 
 /// @brief 服务端进入DeepSleep
@@ -294,18 +375,85 @@ void server_setup(bool reset_cause_is_deepsleep){
 
 #else
 
-TaskHandle_t task_alarm;
-
 void tfunc_alarm(void* p){
     log_i("alarm task created");
     for (;;){
         xTaskNotifyWait(0,0,NULL,portMAX_DELAY);
+        log_i("alarming");
         for (uint8_t i=0;i<3;i++){
             digitalWrite(FWPIN_EN_DEV,1);
             delay(600);
             digitalWrite(FWPIN_EN_DEV,0);
             delay(200);
         }
+        delay(600); // 30000 - 3*(200+600)
+        round_founded = false;
+    }
+}
+
+void tfunc_scanner(void* p){
+    log_i("scanner task created");
+    for (;;){
+        xSemaphoreTake(ble_lock, portMAX_DELAY);
+        log_i("scanner running");
+        p_blescan->start(0); // scan forever
+        xSemaphoreGive(ble_lock);
+        log_i("scanner stopped");
+        delay(2); // 两个时间片，确保锁被抢走
+    }
+}
+
+void tfunc_ui(void* p){
+    log_i("ui task created");
+    for (;;){
+        xTaskNotifyWait(0,0,nullptr,60*1000);
+        // update ui
+        float vbat = read_battery_voltage();
+        /*
+            |FDX-26060100   4.14V|
+            |007F [12:05]   3.84V|
+            |1120 [10:01]   3.51V|
+            |                    |
+            |                    |
+            |                    |
+            |                    |
+            |1145         -127dBm|
+         */
+        oled.setCursor(0,0);
+        oled.printf("FDX-" STRINGIFY(FIRMWARE_VERSION)"   %.2fV\r\n", vbat);
+        xSemaphoreTake(devlst_lock,portMAX_DELAY);
+        for (auto& di:found_ble_devices){
+            if (di.empty){
+                oled.println();
+            }
+            else {
+                char buf[12];
+                char* ptr = buf;
+                int_to_string_buf(di.mac_end[0], &ptr); // 2
+                int_to_string_buf(di.mac_end[1], &ptr); // 4
+                *(ptr++) = ' '; // 5
+                *(ptr++) = '['; // 6
+                uint8_t hour = int(di.time)/3600;
+                uint8_t minute = (int(di.time)%3600)/60;
+                int_to_string_buf(hour, &ptr); // 8
+                int_to_string_buf(minute, &ptr); // 10
+                *ptr = 0; // 11
+                oled.printf("%s]   %.2fV\r\n", buf, vbat);
+            }
+        }
+        xSemaphoreGive(devlst_lock);
+        xSemaphoreTake(devcli_lock,portMAX_DELAY);
+        if (!found_ble_client_device.empty){
+            char buf[10];
+            char* ptr = buf;
+            int_to_string_buf(found_ble_client_device.mac_end[0],&ptr);
+            int_to_string_buf(found_ble_client_device.mac_end[1],&ptr);
+            *ptr = 0;
+            oled.print(buf);
+            oled.printf("         %hhddBm", found_ble_client_device.battery_voltage);
+        }
+        xSemaphoreGive(devcli_lock);
+        oled.display();
     }
 }
 
@@ -313,8 +461,15 @@ inline void activate_alarm(){
     xTaskNotify(task_alarm, NULL, eNoAction);
 }
 
+inline void update_ui(){
+    xTaskNotify(task_ui,NULL,eNoAction);
+}
+
 void AdvertisingDevCallbacks::onResult(BLEAdvertisedDevice dev) {
-    if (dev.haveName()&&dev.haveManufacturerData()){
+    if (round_founded){ // 扫描冷却
+        return;
+    }
+    if (dev.haveName()&&dev.haveManufacturerData()&&dev.haveTXPower()){
         auto name = dev.getName();
         auto data = dev.getManufacturerData();
         if ((name==ble_client_name||name==ble_server_name)&&data.length()==sizeof(AdvertisingData)){
@@ -327,19 +482,58 @@ void AdvertisingDevCallbacks::onResult(BLEAdvertisedDevice dev) {
             if (advdata.company_id!=adv_company_id){
                 return;
             }
-            auto addrstr = dev.getAddress().toString().c_str();
-            log_i("transmitter: mac=%s vbat=%.2f type=%hhu", addrstr, advdata.battery_voltage, static_cast<uint8_t>(advdata.type));
+            auto addr = dev.getAddress();
+            auto addr_arr = addr.getNative();
+            char stringbuf[18];
+            bleaddr_tostrbuf(addr, stringbuf);
+            log_i("transmitter: mac=%s vbat=%.2f type=%hhu", stringbuf, advdata.battery_voltage, static_cast<uint8_t>(advdata.type));
+            round_founded = true;
             activate_alarm();
-            /// @todo 把设备信息给UI渲染函数
+            char rssi = 0;
+            if (dev.haveRSSI()){
+                auto l_rssi = dev.getRSSI();
+                if (l_rssi<=-127){
+                    rssi = l_rssi;
+                }
+            }
+            if (advdata.type==AdvertisingType::CLIENT_ALARM){
+                xSemaphoreTake(devcli_lock, portMAX_DELAY);
+                found_ble_client_device.empty = false;
+                found_ble_client_device.battery_voltage = decode_battery_voltage(advdata.battery_voltage);
+                found_ble_client_device.mac_end[0] = addr_arr[5];
+                found_ble_client_device.mac_end[1] = addr_arr[6];
+                found_ble_client_device.rssi = rssi;
+                found_ble_client_device.type = advdata.type;
+                found_ble_client_device.time = 0<=int(advdata.now)&&int(advdata.now)<=86400?advdata.now:DaySeconds(0);
+                xSemaphoreGive(devcli_lock);
+            }
+            else {
+                xSemaphoreTake(devlst_lock, portMAX_DELAY);
+                for (ServerInfo& devinf:found_ble_devices){
+                    if (devinf.empty){
+                        devinf.empty = false;
+                        devinf.mac_end[0] = addr_arr[5];
+                        devinf.mac_end[1] = addr_arr[6];
+                        devinf.rssi = rssi;
+                        devinf.type = advdata.type;
+                        devinf.battery_voltage = decode_battery_voltage(advdata.battery_voltage);
+                        devinf.time = 0<=int(advdata.now)&&int(advdata.now)<=86400?advdata.now:DaySeconds(0);
+                        break;
+                    }
+                }
+                xSemaphoreGive(devlst_lock);
+            }
         }
     }
 }
 
 #endif
+#pragma endregion
 
 void setup(){
+    setCpuFrequencyMhz(80);
     Serial.begin(115200);
-    delay(10);
+    delay(5);
     log_i("FuckerDetectorX");
     log_i("VERSION: " STRINGIFY(FIRMWARE_VERSION));
     log_i("REBOOT COUNT: %u", chip_boot_counter++);
@@ -347,49 +541,52 @@ void setup(){
     pinMode(FWPIN_LED,OUTPUT);
     pinMode(FWPIN_BOOT,INPUT);
     pinMode(FWPIN_FUNCT,INPUT);
+    pinMode(FWPIN_BTN_BEGIN_CLI, INPUT);
     led(0);
-    // 选择性初始化
-#if FW_SERVER
-#pragma message("Server Firmware")
-    // RTC gpio
     esp_reset_reason_t reset_reason = esp_reset_reason();
-    if (reset_reason==ESP_RST_DEEPSLEEP){
-    }
-    else {
+    if (!(reset_reason==ESP_RST_DEEPSLEEP&&FW_SERVER)){
         pinMode(FWPIN_EN_DEV,OUTPUT);
     }
-    pinMode(FWPIN_SW_ALWAY_ENABLE, INPUT);
-    pinMode(FWPIN_BTN_BEGIN_CLI, INPUT);
-#else
-#pragma message("Client Firmware")
-    pinMode(FWPIN_EN_DEV,OUTPUT);
-#endif
-    // 命令行注册
-#define SET_CMD_HANDLER(__name) command_handler_map[#__name]=cmd_handler::__name;
-    // set command handlers
-    SET_CMD_HANDLER(exit);
-    SET_CMD_HANDLER(help);
-    SET_CMD_HANDLER(getvbat);
-#if FW_SERVER
-    SET_CMD_HANDLER(setdate);
-    SET_CMD_HANDLER(settime);
-    SET_CMD_HANDLER(getdatetime);
-    SET_CMD_HANDLER(lssleep);
-    SET_CMD_HANDLER(addsleep);
-    SET_CMD_HANDLER(delsleep);
-    SET_CMD_HANDLER(savesleep);
-#else
-#endif
-#undef SET_CMD_HANDLER
-    // 初始化外设
     Wire.begin(FWPIN_IIC_SDA, FWPIN_IIC_SCL);
 #if FW_SERVER
     init_rtc();
     load_sleep_intervals();
+    pinMode(FWPIN_SW_ALWAY_ENABLE, INPUT);
+#else
 #endif
     init_ble();
     log_i("setup completed");
-    // 服务器特殊逻辑
+
+#pragma region BeginCLI
+    if (!digitalRead(FWPIN_BTN_BEGIN_CLI)) {
+        log_i("beginning cli");
+        // 命令行注册
+#define SET_CMD_HANDLER(__name) command_handler_map[#__name]=cmd_handler::__name;
+        // set command handlers
+        SET_CMD_HANDLER(exit);
+        SET_CMD_HANDLER(help);
+        SET_CMD_HANDLER(info);
+#if FW_SERVER
+        SET_CMD_HANDLER(setdate);
+        SET_CMD_HANDLER(settime);
+        SET_CMD_HANDLER(getdatetime);
+        SET_CMD_HANDLER(lssleep);
+        SET_CMD_HANDLER(addsleep);
+        SET_CMD_HANDLER(delsleep);
+        SET_CMD_HANDLER(savesleep);
+#else
+#endif
+#undef SET_CMD_HANDLER
+        reset_command_receiver();
+        for(;;){
+            command_receiver();
+        }
+        // 只能通过输入命令 exit 退出
+    }
+#pragma endregion
+
+#pragma region SpecialLogic
+    // 特殊逻辑
 #if FW_SERVER
     log_i("reset_reason: %d", static_cast<int>(reset_reason));
     log_i("wakeup_cause: %d", static_cast<int>(esp_sleep_get_wakeup_cause()));
@@ -397,25 +594,34 @@ void setup(){
     if (reset_reason==ESP_RST_DEEPSLEEP){
         server_setup(true);
     }
-    else if (!digitalRead(FWPIN_BTN_BEGIN_CLI)) {
-        reset_command_receiver();
-        for(;;){
-            command_receiver();
-        }
-        // 只能通过输入命令 exit 退出
-    }
     else {
         server_setup(false);
     }
 #else
-    xTaskCreate(tfunc_alarm, "alarmtask", 384, NULL, 1, &task_alarm);
+    for(auto& di:found_ble_devices){
+        di.clear();
+    }
+    found_ble_client_device.clear();
+    ble_lock = xSemaphoreCreateMutex();
+    devlst_lock = xSemaphoreCreateMutex();
+    devcli_lock = xSemaphoreCreateMutex();
+    auto status = xTaskCreate(tfunc_alarm, "alarm", alarm_task_stack_size, NULL, 1, &task_alarm);
+    if (status!=pdPASS){
+        log_e("create task failed: %d", status);
+        ESP_ERROR_CHECK(EXC_CREATE_ALARM_TASK_FAILED);
+    }
+    status = xTaskCreate(tfunc_scanner, "scanner", scanner_task_stack_size, NULL, 1, &task_scanner);
+    if (status!=pdPASS){
+        log_e("create task failed");
+        ESP_ERROR_CHECK(EXC_CREATE_SCANNER_TASK_FAILED);
+    }
+    status = xTaskCreate(tfunc_ui, "ui", ui_task_stack_size, nullptr, 1, &task_ui);
+    if (status!=pdPASS){
+        log_e("create task failed");
+        ESP_ERROR_CHECK(EXC_CREATE_UI_TASK_FAILED);
+    }
 #endif
+#pragma endregion
 }
 
-#if FW_SERVER
 void loop(){}
-#else
-void loop(){
-    /// @todo UI渲染逻辑
-}
-#endif
