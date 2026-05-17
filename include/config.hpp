@@ -51,7 +51,7 @@
 static_assert(sizeof(int)==4,"arch error");
 
 // Year[2] Month[2] Day[2] SubVersion[2]
-#define FIRMWARE_VERSION 26051700
+#define FIRMWARE_VERSION 26051701
 
 /* Board: ESP32-C3 SuperMini/ProMini
    _____________

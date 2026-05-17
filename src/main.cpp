@@ -32,7 +32,7 @@ RTC_DATA_ATTR uint32_t chip_boot_counter = 0;
 #define CMD_PARSE_INT_PARAM(__pindex) \
     char* param##__pindex##_str = command_paramlist_buffer[__pindex];\
     char* param##__pindex##_end;\
-    int param##__pindex = std::strtol(param##__pindex##_str,&param##__pindex##_str,10);\
+    int param##__pindex = std::strtol(param##__pindex##_str,&param##__pindex##_end,10);\
     if (param##__pindex##_str==param##__pindex##_str){\
         log_e("syntax error: invalid param");\
     }
@@ -432,8 +432,27 @@ void tfunc_ui(void* p){
                 *(ptr++) = '['; // 6
                 uint8_t hour = int(di.time)/3600;
                 uint8_t minute = (int(di.time)%3600)/60;
-                int_to_string_buf(hour, &ptr); // 8
-                int_to_string_buf(minute, &ptr); // 10
+                //int_to_string_buf(hour, &ptr); // 8
+                //int_to_string_buf(minute, &ptr); // 10
+                char* p;
+                if (hour<10){ 
+                    *(ptr++) = ' '; // 7
+                    p = ptr;
+                }
+                else {
+                    p = ptr;
+                    ptr += 2;
+                }
+                snprintf(p, 2, "%hhu", hour); // 8
+                if (minute<10){ 
+                    *(ptr++) = ' '; // 9
+                    p = ptr;
+                }
+                else {
+                    p = ptr;
+                    ptr += 2;
+                }
+                snprintf(p, 2, "%hhu", minute); // 10
                 *ptr = 0; // 11
                 oled.printf("%s]   %.2fV\r\n", buf, vbat);
             }
@@ -483,8 +502,7 @@ void AdvertisingDevCallbacks::onResult(BLEAdvertisedDevice dev) {
             if (advdata.company_id!=adv_company_id){
                 return;
             }
-            auto addr = dev.getAddress();
-            auto addr_arr = addr.getNative();
+            uint8_t* addr = dev.getAddress().getNative();
             char stringbuf[18];
             bleaddr_tostrbuf(addr, stringbuf);
             log_i("transmitter: mac=%s vbat=%.2f type=%hhu", stringbuf, advdata.battery_voltage, static_cast<uint8_t>(advdata.type));
@@ -493,7 +511,7 @@ void AdvertisingDevCallbacks::onResult(BLEAdvertisedDevice dev) {
             char rssi = 0;
             if (dev.haveRSSI()){
                 auto l_rssi = dev.getRSSI();
-                if (l_rssi<=-127){
+                if (l_rssi>=-127){
                     rssi = l_rssi;
                 }
             }
@@ -501,8 +519,8 @@ void AdvertisingDevCallbacks::onResult(BLEAdvertisedDevice dev) {
                 xSemaphoreTake(devcli_lock, portMAX_DELAY);
                 found_ble_client_device.empty = false;
                 found_ble_client_device.battery_voltage = decode_battery_voltage(advdata.battery_voltage);
-                found_ble_client_device.mac_end[0] = addr_arr[5];
-                found_ble_client_device.mac_end[1] = addr_arr[6];
+                found_ble_client_device.mac_end[0] = addr[5];
+                found_ble_client_device.mac_end[1] = addr[6];
                 found_ble_client_device.rssi = rssi;
                 found_ble_client_device.type = advdata.type;
                 found_ble_client_device.time = 0<=int(advdata.now)&&int(advdata.now)<=86400?advdata.now:DaySeconds(0);
@@ -513,8 +531,8 @@ void AdvertisingDevCallbacks::onResult(BLEAdvertisedDevice dev) {
                 for (ServerInfo& devinf:found_ble_devices){
                     if (devinf.empty){
                         devinf.empty = false;
-                        devinf.mac_end[0] = addr_arr[5];
-                        devinf.mac_end[1] = addr_arr[6];
+                        devinf.mac_end[0] = addr[5];
+                        devinf.mac_end[1] = addr[6];
                         devinf.rssi = rssi;
                         devinf.type = advdata.type;
                         devinf.battery_voltage = decode_battery_voltage(advdata.battery_voltage);

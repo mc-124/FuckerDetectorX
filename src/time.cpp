@@ -27,7 +27,7 @@ void load_sleep_intervals(){
     for (uint8_t index=0;index<sleep_interval_array_size;index++){
         SleepInterval& si = sleep_interval_array[index];
         if (!(0<=int(si.start_sec)&&int(si.start_sec)<=86400)||!(0<=int(si.end_sec)&&int(si.end_sec)<=86400)){
-            log_w("[%hhu] invalid sleep interval");
+            log_w("[%hhu] invalid sleep interval", index);
             si.start_sec = 0;
             si.end_sec = 0;
         }

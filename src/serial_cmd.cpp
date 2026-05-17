@@ -128,7 +128,7 @@ void command_receiver(){
                 size_t& param_len = command_paramlist_length[command_param_count-1];
                 if (param_len<cmd_param_bufsize){
                     command_paramlist_buffer[command_param_count-1][param_len++] = byte;
-                    Serial.print(static_cast<int>(byte));
+                    Serial.print(static_cast<char>(byte));
                 }
             }
             else if (byte=='\b'||byte==0x7f){

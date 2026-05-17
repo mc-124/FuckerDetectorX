@@ -27,7 +27,7 @@ struct AdvertisingData {
 };
 
 constexpr float decode_battery_voltage(uint8_t cvbat){
-    return (cvbat/100)+2.0;
+    return (cvbat/100.0)+2.0;
 }
 
 static_assert(sizeof(AdvertisingData)==8, "data error");
@@ -73,4 +73,4 @@ void set_advertising_data(const AdvertisingData& data);
 void start_advertising();
 void stop_advertising();
 void init_advertising_data(AdvertisingData& data, const AdvertisingType type);
-void bleaddr_tostrbuf(BLEAddress& addr, char* buf); // buf: char[18]
+void bleaddr_tostrbuf(uint8_t* bytes, char* buf); // buf: char[18]

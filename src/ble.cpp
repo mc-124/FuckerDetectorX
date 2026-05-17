@@ -102,9 +102,8 @@ void init_advertising_data(AdvertisingData& data, const AdvertisingType type){
 #endif
 }
 
-void bleaddr_tostrbuf(BLEAddress& addr, char* buf){
+void bleaddr_tostrbuf(uint8_t* bytes, char* buf){
     constexpr char abc[17] = "0123456789ABCDEF";
-    uint8_t* bytes = addr.getNative();
     for (uint8_t i=0;i<6;i++){
         int_to_string_buf(*(bytes++), &buf);
         if (i!=5){
