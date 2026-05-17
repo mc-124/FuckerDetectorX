@@ -67,6 +67,29 @@
       "top": 76.8,
       "left": -326.4,
       "attrs": { "text": "BEGIN_CLI" }
+    },
+    {
+      "type": "wokwi-pushbutton-6mm",
+      "id": "btn1",
+      "top": -69.4,
+      "left": -105.6,
+      "attrs": { "color": "green", "xray": "1" }
+    },
+    { "type": "wokwi-slide-switch", "id": "sw4", "top": -91.6, "left": -54.5, "attrs": {} },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": -92.05,
+      "left": -124.8,
+      "attrs": { "value": "1000" }
+    },
+    { "type": "wokwi-junction", "id": "j3", "top": 33.6, "left": -81.6, "attrs": {} },
+    {
+      "type": "wokwi-text",
+      "id": "text7",
+      "top": -115.2,
+      "left": -163.2,
+      "attrs": { "text": "FUNCT PULLUP/PULLDOWN" }
     }
   ],
   "connections": [
@@ -80,11 +103,8 @@
     [ "j2:J", "esp:3V3.2", "red", [ "v0", "h48", "v-19.2" ] ],
     [ "j2:J", "sw1:3", "red", [ "v0" ] ],
     [ "j2:J", "sw2:3", "red", [ "v0", "h-48" ] ],
-    [ "sw1:2", "esp:2", "gold", [ "v28.8", "h57.7", "v-9.6", "h9.6" ] ],
     [ "j1:J", "esp:GND.2", "black", [ "v0", "h9.6", "v9.6" ] ],
     [ "j1:J", "led1:C", "black", [ "v9.6", "h-76.8" ] ],
-    [ "led1:A", "esp:1", "blue", [ "v0" ] ],
-    [ "esp:4", "sw2:2", "white", [ "v-0.3", "h23.74", "v48", "h-249.6" ] ],
     [ "esp:7", "rtc1:SCL", "violet", [ "h71.74", "v-48.3" ] ],
     [ "rtc1:SDA", "esp:6", "gray", [ "h-28.8", "v66.9" ] ],
     [ "rtc1:5V", "esp:5V.1", "magenta", [ "h-19.2", "v-29.2", "h-220.8", "v144" ] ],
@@ -97,7 +117,16 @@
     [ "led2:A", "esp:0", "#8f4814", [ "v0" ] ],
     [ "j2:J", "sw3:3", "red", [ "v0" ] ],
     [ "sw3:1", "j1:J", "black", [ "v9.6", "h144" ] ],
-    [ "sw3:2", "esp:5", "purple", [ "v67.2", "h364.9", "v-67.2" ] ]
+    [ "sw2:2", "esp:4", "green", [ "v134.4", "h268.9", "v-47.7" ] ],
+    [ "led1:A", "esp:5", "violet", [ "v134.4", "h307.2", "v-66.9" ] ],
+    [ "esp:3", "sw3:2", "blue", [ "h-70.98", "v66.9", "h-163.2" ] ],
+    [ "r1:2", "sw4:2", "#8f4814", [ "v38.4", "h27.5" ] ],
+    [ "sw4:1", "esp:3V3.1", "red", [ "v19.2", "h19.2", "v67.5" ] ],
+    [ "esp:GND.1", "sw4:3", "black", [ "v-0.3", "h-22.98", "v-67.2", "h-9.6" ] ],
+    [ "sw1:2", "j3:J", "gold", [ "v0" ] ],
+    [ "btn1:2.r", "j3:J", "gold", [ "h0.8", "v29.2" ] ],
+    [ "j3:J", "esp:1", "gold", [ "v67.2" ] ],
+    [ "btn1:1.l", "r1:1", "#8f4814", [ "h0" ] ]
   ],
   "dependencies": {}
 }
