@@ -258,7 +258,7 @@ void transmit_advertising(AdvertisingType type, DaySeconds now=get_dayseconds())
     init_advertising_data(data, type);
 
 #if !FW_SERVER
-    p_blescan->stop();
+    p_blescan->stop();  // 让扫描任务让出锁
     xSemaphoreTake(ble_lock, portMAX_DELAY);
     log_i("start advertising");
 #endif
@@ -311,7 +311,7 @@ void begin_deepsleep(bool dev_pw, const DaySeconds& sleep_time){
     Wire.flush();
     Wire.end();
     // 入睡
-    gpio_hold_en(static_cast<gpio_num_t>(FWPIN_SW_ALWAY_ENABLE));
+    gpio_hold_en(static_cast<gpio_num_t>(FWPIN_EN_DEV));
     gpio_deep_sleep_hold_en();
     esp_sleep_enable_timer_wakeup(static_cast<int>(sleep_time)*1000000);
     esp_deep_sleep_start();
@@ -338,6 +338,7 @@ void server_setup(bool reset_cause_is_deepsleep){
         log_i("power on");
     }
     if (digitalRead(FWPIN_SW_ALWAY_ENABLE)){
+        // 关闭
         SleepInterval* si = find_in_progress_interval(now);
         if (si){ // 找到了正在进行中的睡眠区间
             log_i("found in progress sleep interval");
@@ -355,6 +356,7 @@ void server_setup(bool reset_cause_is_deepsleep){
         log_w("avaliable sleep interval not found");
     }
     else {
+        // 启用
         log_i("alway enable");
     }
     // 未找到可用的睡眠区间或启用了alway enable
@@ -420,7 +422,7 @@ void tfunc_ui(void* p){
         oled.printf("FDX-" STRINGIFY(FIRMWARE_VERSION)"   %.2fV\r\n", vbat);
         xSemaphoreTake(devlst_lock,portMAX_DELAY);
         for (auto& di:found_ble_devices){
-            if (di.empty){
+            if (di.empty||int(di.time)>86400||int(di.time)<0){
                 oled.println();
             }
             else {
@@ -432,12 +434,11 @@ void tfunc_ui(void* p){
                 *(ptr++) = '['; // 6
                 uint8_t hour = int(di.time)/3600;
                 uint8_t minute = (int(di.time)%3600)/60;
-                //int_to_string_buf(hour, &ptr); // 8
-                //int_to_string_buf(minute, &ptr); // 10
                 char* p;
+                // hour 和 minute 不可能出现三位数的值
                 if (hour<10){ 
                     *(ptr++) = ' '; // 7
-                    p = ptr;
+                    p = ptr++;
                 }
                 else {
                     p = ptr;
@@ -446,7 +447,7 @@ void tfunc_ui(void* p){
                 snprintf(p, 2, "%hhu", hour); // 8
                 if (minute<10){ 
                     *(ptr++) = ' '; // 9
-                    p = ptr;
+                    p = ptr++;
                 }
                 else {
                     p = ptr;
@@ -454,7 +455,9 @@ void tfunc_ui(void* p){
                 }
                 snprintf(p, 2, "%hhu", minute); // 10
                 *ptr = 0; // 11
-                oled.printf("%s]   %.2fV\r\n", buf, vbat);
+                oled.printf("%s]   %.2fV\r\n", buf, 
+                    decode_battery_voltage(di.battery_voltage)
+                );
             }
         }
         xSemaphoreGive(devlst_lock);
@@ -466,7 +469,7 @@ void tfunc_ui(void* p){
             int_to_string_buf(found_ble_client_device.mac_end[1],&ptr);
             *ptr = 0;
             oled.print(buf);
-            oled.printf("         %hhddBm", found_ble_client_device.battery_voltage);
+            oled.printf("         %hhddBm", found_ble_client_device.rssi);
         }
         xSemaphoreGive(devcli_lock);
         oled.display();
@@ -519,8 +522,8 @@ void AdvertisingDevCallbacks::onResult(BLEAdvertisedDevice dev) {
                 xSemaphoreTake(devcli_lock, portMAX_DELAY);
                 found_ble_client_device.empty = false;
                 found_ble_client_device.battery_voltage = decode_battery_voltage(advdata.battery_voltage);
-                found_ble_client_device.mac_end[0] = addr[5];
-                found_ble_client_device.mac_end[1] = addr[6];
+                found_ble_client_device.mac_end[0] = addr[4];
+                found_ble_client_device.mac_end[1] = addr[5];
                 found_ble_client_device.rssi = rssi;
                 found_ble_client_device.type = advdata.type;
                 found_ble_client_device.time = 0<=int(advdata.now)&&int(advdata.now)<=86400?advdata.now:DaySeconds(0);
@@ -531,8 +534,8 @@ void AdvertisingDevCallbacks::onResult(BLEAdvertisedDevice dev) {
                 for (ServerInfo& devinf:found_ble_devices){
                     if (devinf.empty){
                         devinf.empty = false;
-                        devinf.mac_end[0] = addr[5];
-                        devinf.mac_end[1] = addr[6];
+                        devinf.mac_end[0] = addr[4];
+                        devinf.mac_end[1] = addr[5];
                         devinf.rssi = rssi;
                         devinf.type = advdata.type;
                         devinf.battery_voltage = decode_battery_voltage(advdata.battery_voltage);

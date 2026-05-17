@@ -37,9 +37,17 @@
 #error __cplusplus must >= c++23
 #endif
 
+#if __IN_VSCODE
+#warning __IN_VSCODE
+
+//////////////////////////////
+#define FW_SERVER 0
+//////////////////////////////
+
+#else
 #ifndef FW_SERVER
-#warning FW_SERVER is undefined
-#define FW_SERVER 1
+#error FW_SERVER is undefined
+#endif
 #endif
 
 #if FW_SERVER
