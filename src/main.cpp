@@ -71,21 +71,7 @@ namespace cmd_handler {
             Serial.println("type: client");
         }
         Serial.println("version: " STRINGIFY(FIRMWARE_VERSION));
-        if constexpr(ARDUHAL_LOG_LEVEL==ARDUHAL_LOG_LEVEL_DEBUG){
-            Serial.println("log level: debug");
-        }
-        else if constexpr(ARDUHAL_LOG_LEVEL==ARDUHAL_LOG_LEVEL_INFO){
-            Serial.println("log level: info");
-        }
-        else if constexpr(ARDUHAL_LOG_LEVEL==ARDUHAL_LOG_LEVEL_WARN){
-            Serial.println("log level: warn");
-        }
-        else if constexpr(ARDUHAL_LOG_LEVEL==ARDUHAL_LOG_LEVEL_VERBOSE){
-            Serial.println("log level: verbose");
-        }
-        else {
-            Serial.println("log level: error");
-        }
+        Serial.println("log level: " FW_LOG_LEVEL);
         Serial.println("compile time: " __TIMESTAMP__);
         float vbat = read_battery_voltage();
         Serial.printf("battery voltage: %.2f\r\n", vbat);
@@ -246,6 +232,7 @@ struct ServerInfo {
     bool empty;
     DaySeconds time;
 
+    /// @brief 初始化结构体
     inline void clear(){
         this->mac_end[0] = 0;
         this->mac_end[1] = 0;
@@ -259,11 +246,13 @@ struct ServerInfo {
 
 ServerInfo found_ble_devices[found_ble_device_array_length]; // devlst_lock
 ServerInfo found_ble_client_device; // devcli_lock
-uint8_t found_ble_device_count = 0;
 bool round_founded = false; // 扫描冷却
 
 #endif
 
+/// @brief 发送广告
+/// @param type 广告类型
+/// @param now 时间
 void transmit_advertising(AdvertisingType type, DaySeconds now=get_dayseconds()){
     AdvertisingData data;
     init_advertising_data(data, type);
@@ -375,6 +364,8 @@ void server_setup(bool reset_cause_is_deepsleep){
 
 #else
 
+/// @brief 响铃任务
+/// @param p 无参数
 void tfunc_alarm(void* p){
     log_i("alarm task created");
     for (;;){
@@ -382,8 +373,10 @@ void tfunc_alarm(void* p){
         log_i("alarming");
         for (uint8_t i=0;i<3;i++){
             digitalWrite(FWPIN_EN_DEV,1);
+            led(1);
             delay(600);
             digitalWrite(FWPIN_EN_DEV,0);
+            led(0);
             delay(200);
         }
         delay(600); // 30000 - 3*(200+600)
@@ -391,6 +384,8 @@ void tfunc_alarm(void* p){
     }
 }
 
+/// @brief 扫描任务
+/// @param p 无参数
 void tfunc_scanner(void* p){
     log_i("scanner task created");
     for (;;){
@@ -403,6 +398,8 @@ void tfunc_scanner(void* p){
     }
 }
 
+/// @brief UI绘图任务
+/// @param p 无参数
 void tfunc_ui(void* p){
     log_i("ui task created");
     for (;;){
@@ -457,19 +454,23 @@ void tfunc_ui(void* p){
     }
 }
 
+/// @brief 激活闹钟
 inline void activate_alarm(){
     xTaskNotify(task_alarm, NULL, eNoAction);
 }
 
+/// @brief 触发更新UI
 inline void update_ui(){
     xTaskNotify(task_ui,NULL,eNoAction);
 }
 
+/// @brief 扫描回调
+/// @param dev 扫到的设备
 void AdvertisingDevCallbacks::onResult(BLEAdvertisedDevice dev) {
     if (round_founded){ // 扫描冷却
         return;
     }
-    if (dev.haveName()&&dev.haveManufacturerData()&&dev.haveTXPower()){
+    else if (dev.haveName()&&dev.haveManufacturerData()&&dev.haveTXPower()){
         auto name = dev.getName();
         auto data = dev.getManufacturerData();
         if ((name==ble_client_name||name==ble_server_name)&&data.length()==sizeof(AdvertisingData)){
@@ -527,6 +528,11 @@ void AdvertisingDevCallbacks::onResult(BLEAdvertisedDevice dev) {
     }
 }
 
+/// @brief FUNCT按钮双击
+void funct_button_ondclick(){
+    transmit_advertising(AdvertisingType::CLIENT_ALARM);
+}
+
 #endif
 #pragma endregion
 
@@ -534,13 +540,12 @@ void setup(){
     setCpuFrequencyMhz(80);
     Serial.begin(115200);
     delay(5);
-    log_i("FuckerDetectorX");
+    log_i("FuckerDetectorX " FW_TYPE_STRING);
     log_i("VERSION: " STRINGIFY(FIRMWARE_VERSION));
     log_i("REBOOT COUNT: %u", chip_boot_counter++);
     pinMode(FWPIN_EN_VBAT, OUTPUT);
     pinMode(FWPIN_LED,OUTPUT);
     pinMode(FWPIN_BOOT,INPUT);
-    pinMode(FWPIN_FUNCT,INPUT);
     pinMode(FWPIN_BTN_BEGIN_CLI, INPUT);
     led(0);
     esp_reset_reason_t reset_reason = esp_reset_reason();
@@ -549,10 +554,15 @@ void setup(){
     }
     Wire.begin(FWPIN_IIC_SDA, FWPIN_IIC_SCL);
 #if FW_SERVER
+    pinMode(FWPIN_FUNCT,INPUT);
     init_rtc();
     load_sleep_intervals();
     pinMode(FWPIN_SW_ALWAY_ENABLE, INPUT);
 #else
+    btn_funct.attachDoubleClick(funct_button_ondclick);
+    if (!oled.begin(SSD1306_SWITCHCAPVCC, ssd1306_i2c_address)){
+        ESP_ERROR_CHECK(EXC_INIT_OLED_FAILED);
+    }
 #endif
     init_ble();
     log_i("setup completed");
@@ -624,4 +634,10 @@ void setup(){
 #pragma endregion
 }
 
+#if FW_SERVER
 void loop(){}
+#else
+void loop(){
+    btn_funct.tick();
+}
+#endif

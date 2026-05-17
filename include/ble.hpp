@@ -1,7 +1,6 @@
 #pragma once
 
 #include "config.hpp"
-#include "common.hpp"
 
 #include <esp_mac.h>
 
@@ -12,6 +11,7 @@
 #include <BLEAdvertising.h>
 #include <BLEAdvertisedDevice.h>
 
+#include "common.hpp"
 #include "time.hpp"
 
 enum class AdvertisingType:uint8_t {
@@ -43,8 +43,8 @@ extern AdvertisingDevCallbacks advdev_callbacks;
 
 #endif
 
-extern uint16_t adv_max_interval = 0;
-extern uint16_t adv_min_interval = 0;
+extern uint16_t adv_max_interval;
+extern uint16_t adv_min_interval;
 
 extern BLEServer* p_bleserver;
 extern BLEAdvertising* p_bleadvertising;

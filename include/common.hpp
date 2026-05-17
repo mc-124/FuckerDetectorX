@@ -25,10 +25,10 @@ float read_battery_voltage();
 #include <OneButton.h>
 
 extern Adafruit_SSD1306 oled;
-extern OneButton btn_;
-
-void int_to_string_buf(uint8_t,char**);
-void int_to_string_buf(uint16_t,char**);
-void int_to_string_buf(uint32_t,char**);
+extern OneButton btn_funct;
 
 #endif
+
+void int_to_string_buf(uint8_t u8,char **buf);
+void int_to_string_buf(uint16_t u16,char **buf);
+void int_to_string_buf(uint32_t u32,char **buf);

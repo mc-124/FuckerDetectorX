@@ -16,10 +16,9 @@ float read_battery_voltage(){
 #else
 
 Adafruit_SSD1306 oled(128,64,&Wire);
+OneButton btn_funct(FWPIN_FUNCT,true,false);
 
 #endif
-
-// 阴间代码警告
 
 static char hexdig[17] = "0123456789ABCDEF";
 
