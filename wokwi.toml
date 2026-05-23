@@ -1,5 +1,7 @@
 [wokwi]
 version=1
-firmware='build/server/FuckerDetectorX.ino.bin'
-elf='build/server/FuckerDetectorX.ino.elf'
+#firmware='build/server/FuckerDetectorX.ino.bin'
+firmware='build/client/FuckerDetectorX.ino.bin'
+#elf='build/server/FuckerDetectorX.ino.elf'
+elf='build/client/FuckerDetectorX.ino.elf'
 

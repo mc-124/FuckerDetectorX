@@ -41,7 +41,7 @@
 #warning __IN_VSCODE
 
 //////////////////////////////
-#define FW_SERVER 1
+#define FW_SERVER 0
 //////////////////////////////
 
 #else
@@ -59,7 +59,7 @@
 static_assert(sizeof(int)==4,"arch error");
 
 // Year[2] Month[2] Day[2] SubVersion[2]
-#define FIRMWARE_VERSION 26052300
+#define FIRMWARE_VERSION 26052402
 
 /* Board: ESP32-C3 SuperMini/ProMini
    _____________
@@ -105,6 +105,7 @@ constexpr uint16_t sleep_interval_eeprom_address = 0xeff;
 constexpr auto ble_device_name = ble_server_name;
 constexpr uint32_t ld1040_init_time = 7500; // ms
 constexpr char datetime_format[] = "YYYY-MM-DD hh:mm:ss";
+constexpr uint32_t srvmain_task_stack_size = 8192*4;
 
 static_assert(
     sleep_interval_eeprom_address+(sleep_interval_array_size*8)<4096,
@@ -116,11 +117,11 @@ static_assert(
 constexpr auto ble_device_name = ble_client_name;
 constexpr uint8_t ssd1306_i2c_address = 0x3c;
 constexpr uint32_t scan_interval = 48;
-constexpr uint32_t scanner_task_stack_size = 8192; // word
-constexpr uint32_t alarm_task_stack_size = 384;
-constexpr uint8_t found_ble_device_array_length = 6;
-constexpr uint32_t ui_task_stack_size = 2560;
-constexpr uint32_t devlst_updater_task_stack_size = 512;
+constexpr uint32_t scanner_task_stack_size = 8192*4;
+constexpr uint32_t alarm_task_stack_size = 800*4;
+constexpr uint8_t devsrv_lst_len = 6;
+constexpr uint32_t ui_task_stack_size = 2560*4;
+constexpr uint32_t diupdate_task_stack_size = 1024*4;
 constexpr uint32_t scanresult_queue_length = 4;
 
 #endif
@@ -130,5 +131,5 @@ constexpr size_t cmd_operator_bufsize = 15;
 constexpr size_t cmd_paramlist_bufsize = 4;
 constexpr size_t cmd_param_bufsize = 15;
 constexpr size_t cmd_handler_maxcount = 16;
-constexpr uint32_t rtos_task_stack_size = 1280; // 单位word
 constexpr uint32_t advertising_timeout = 2500; // ms
+constexpr uint32_t battery_voltage_cache_timeout = 15; // s
