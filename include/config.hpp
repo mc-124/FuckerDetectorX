@@ -41,7 +41,7 @@
 #warning __IN_VSCODE
 
 //////////////////////////////
-#define FW_SERVER 0
+#define FW_SERVER 1
 //////////////////////////////
 
 #else
@@ -59,7 +59,7 @@
 static_assert(sizeof(int)==4,"arch error");
 
 // Year[2] Month[2] Day[2] SubVersion[2]
-#define FIRMWARE_VERSION 26051702
+#define FIRMWARE_VERSION 26052300
 
 /* Board: ESP32-C3 SuperMini/ProMini
    _____________
@@ -120,6 +120,8 @@ constexpr uint32_t scanner_task_stack_size = 8192; // word
 constexpr uint32_t alarm_task_stack_size = 384;
 constexpr uint8_t found_ble_device_array_length = 6;
 constexpr uint32_t ui_task_stack_size = 2560;
+constexpr uint32_t devlst_updater_task_stack_size = 512;
+constexpr uint32_t scanresult_queue_length = 4;
 
 #endif
 

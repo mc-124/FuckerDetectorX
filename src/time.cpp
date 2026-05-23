@@ -55,16 +55,15 @@ SleepInterval* find_in_progress_interval(const DaySeconds& now){
 
 SleepInterval* find_next_sleep_interval(const DaySeconds& now){
     SleepInterval* min_si = nullptr;
+    DaySeconds min_diff = 86400;
     for (uint8_t i=0;i<sleep_interval_array_size;i++){
         SleepInterval* si = sleep_interval_array+i;
-        if (si->is_available()&&now<si->start_sec){
-            if (min_si){
-                if (si->start_sec<min_si->start_sec){
-                    min_si = si;
-                }
-            }
-            else {
+        // 解决无法跨天问题
+        if (si->is_available()){
+            DaySeconds diff = si->start_sec - now;
+            if (diff<min_diff){
                 min_si = si;
+                min_diff = diff;
             }
         }
     }

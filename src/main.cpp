@@ -18,6 +18,7 @@
 #include "serial_cmd.hpp"
 
 #include <utility>
+#include <atomic>
 #include <cstring>
 #include <cerrno>
 
@@ -33,7 +34,7 @@ RTC_DATA_ATTR uint32_t chip_boot_counter = 0;
     char* param##__pindex##_str = command_paramlist_buffer[__pindex];\
     char* param##__pindex##_end;\
     int param##__pindex = std::strtol(param##__pindex##_str,&param##__pindex##_end,10);\
-    if (param##__pindex##_str==param##__pindex##_str){\
+    if (param##__pindex##_str==param##__pindex##_end){\
         log_e("syntax error: invalid param");\
     }
 
@@ -223,6 +224,8 @@ SemaphoreHandle_t devcli_lock;
 TaskHandle_t task_alarm;
 TaskHandle_t task_scanner;
 TaskHandle_t task_ui;
+TaskHandle_t task_devlst_updater;
+QueueHandle_t queue_scan_results;
 
 struct ServerInfo {
     uint8_t mac_end[2];
@@ -246,7 +249,7 @@ struct ServerInfo {
 
 ServerInfo found_ble_devices[found_ble_device_array_length]; // devlst_lock
 ServerInfo found_ble_client_device; // devcli_lock
-bool round_founded = false; // 扫描冷却
+std::atomic_bool round_founded = false; // 扫描冷却
 
 #endif
 
@@ -360,7 +363,7 @@ void server_setup(bool reset_cause_is_deepsleep){
         log_i("alway enable");
     }
     // 未找到可用的睡眠区间或启用了alway enable
-    const DaySeconds sleep_time = now>DaySeconds(30)?DaySeconds(30):DaySeconds(0);
+    const DaySeconds sleep_time = 0; // 睡到00:00
     begin_deepsleep(true, sleep_time);
 }
 
@@ -418,44 +421,24 @@ void tfunc_ui(void* p){
             |                    |
             |1145         -127dBm|
          */
+        oled.clearDisplay();
         oled.setCursor(0,0);
-        oled.printf("FDX-" STRINGIFY(FIRMWARE_VERSION)"   %.2fV\r\n", vbat);
+        oled.printf("FDX-" STRINGIFY(FIRMWARE_VERSION)"   % 4.2fV\r\n", vbat);
         xSemaphoreTake(devlst_lock,portMAX_DELAY);
         for (auto& di:found_ble_devices){
             if (di.empty||int(di.time)>86400||int(di.time)<0){
                 oled.println();
             }
             else {
-                char buf[12];
-                char* ptr = buf;
-                int_to_string_buf(di.mac_end[0], &ptr); // 2
-                int_to_string_buf(di.mac_end[1], &ptr); // 4
-                *(ptr++) = ' '; // 5
-                *(ptr++) = '['; // 6
                 uint8_t hour = int(di.time)/3600;
                 uint8_t minute = (int(di.time)%3600)/60;
-                char* p;
-                // hour 和 minute 不可能出现三位数的值
-                if (hour<10){ 
-                    *(ptr++) = ' '; // 7
-                    p = ptr++;
-                }
-                else {
-                    p = ptr;
-                    ptr += 2;
-                }
-                snprintf(p, 2, "%hhu", hour); // 8
-                if (minute<10){ 
-                    *(ptr++) = ' '; // 9
-                    p = ptr++;
-                }
-                else {
-                    p = ptr;
-                    ptr += 2;
-                }
-                snprintf(p, 2, "%hhu", minute); // 10
-                *ptr = 0; // 11
-                oled.printf("%s]   %.2fV\r\n", buf, 
+                char mac_buf[8];
+                char* p = mac_buf;
+                int_to_string_buf(di.mac_end[0], &p);
+                int_to_string_buf(di.mac_end[1], &p);
+                *p = 0;
+                oled.printf("%s [%02hhu:%02hhu]   % 4.2fV\r\n",
+                    mac_buf, hour, minute,
                     decode_battery_voltage(di.battery_voltage)
                 );
             }
@@ -463,13 +446,12 @@ void tfunc_ui(void* p){
         xSemaphoreGive(devlst_lock);
         xSemaphoreTake(devcli_lock,portMAX_DELAY);
         if (!found_ble_client_device.empty){
-            char buf[10];
+            char buf[8];
             char* ptr = buf;
             int_to_string_buf(found_ble_client_device.mac_end[0],&ptr);
             int_to_string_buf(found_ble_client_device.mac_end[1],&ptr);
             *ptr = 0;
-            oled.print(buf);
-            oled.printf("         %hhddBm", found_ble_client_device.rssi);
+            oled.printf("%s         % 3hhddBm",buf,-found_ble_client_device.rssi);
         }
         xSemaphoreGive(devcli_lock);
         oled.display();
@@ -486,9 +468,46 @@ inline void update_ui(){
     xTaskNotify(task_ui,NULL,eNoAction);
 }
 
+/// @brief 设备列表更新任务
+void tfunc_devlst_updater(void* p){
+    log_i("devlst updater task created");
+    for(;;){
+        ServerInfo si;
+        xQueueReceive(queue_scan_results, &si, portMAX_DELAY);
+        if (si.battery_voltage){
+            // server
+            xSemaphoreTake(devlst_lock, portMAX_DELAY);
+            ServerInfo* infp = nullptr;
+            for (auto& inf:found_ble_devices){
+                if (infp->empty){
+                    continue;
+                }
+                infp = &inf;
+                break;
+            }
+            if (infp){
+                memcpy(infp, &si, sizeof(si));
+            }
+            xSemaphoreGive(devlst_lock);
+        }
+        else {
+            // client
+            xSemaphoreTake(devcli_lock, portMAX_DELAY);
+            memcpy(&found_ble_client_device, &si, sizeof(si));
+            xSemaphoreGive(devcli_lock);
+        }
+    }
+}
+
+inline void update_devlst(const ServerInfo& si){
+    xQueueSend(queue_scan_results, &si, 0);
+}
+
 /// @brief 扫描回调
 /// @param dev 扫到的设备
 void AdvertisingDevCallbacks::onResult(BLEAdvertisedDevice dev) {
+    /// @note 此函数运行在一个FreeRTOS Task中
+    /// @warning 避免阻塞操作
     if (round_founded){ // 扫描冷却
         return;
     }
@@ -518,33 +537,20 @@ void AdvertisingDevCallbacks::onResult(BLEAdvertisedDevice dev) {
                     rssi = l_rssi;
                 }
             }
-            if (advdata.type==AdvertisingType::CLIENT_ALARM){
-                xSemaphoreTake(devcli_lock, portMAX_DELAY);
-                found_ble_client_device.empty = false;
-                found_ble_client_device.battery_voltage = decode_battery_voltage(advdata.battery_voltage);
-                found_ble_client_device.mac_end[0] = addr[4];
-                found_ble_client_device.mac_end[1] = addr[5];
-                found_ble_client_device.rssi = rssi;
-                found_ble_client_device.type = advdata.type;
-                found_ble_client_device.time = 0<=int(advdata.now)&&int(advdata.now)<=86400?advdata.now:DaySeconds(0);
-                xSemaphoreGive(devcli_lock);
+            ServerInfo si;
+            si.empty = false;
+            si.mac_end[0] = addr[4];
+            si.mac_end[1] = addr[5];
+            si.rssi = rssi;
+            si.type = advdata.type;
+            si.time = 0<=int(advdata.now)&&int(advdata.now)<=86400?advdata.now:DaySeconds(0);
+            if (advdata.type==AdvertisingType::SERVER_ALARM){
+                si.battery_voltage = decode_battery_voltage(advdata.battery_voltage);
             }
             else {
-                xSemaphoreTake(devlst_lock, portMAX_DELAY);
-                for (ServerInfo& devinf:found_ble_devices){
-                    if (devinf.empty){
-                        devinf.empty = false;
-                        devinf.mac_end[0] = addr[4];
-                        devinf.mac_end[1] = addr[5];
-                        devinf.rssi = rssi;
-                        devinf.type = advdata.type;
-                        devinf.battery_voltage = decode_battery_voltage(advdata.battery_voltage);
-                        devinf.time = 0<=int(advdata.now)&&int(advdata.now)<=86400?advdata.now:DaySeconds(0);
-                        break;
-                    }
-                }
-                xSemaphoreGive(devlst_lock);
+                si.battery_voltage = 0.0f;
             }
+            update_devlst(si);
         }
     }
 }
@@ -636,6 +642,7 @@ void setup(){
     ble_lock = xSemaphoreCreateMutex();
     devlst_lock = xSemaphoreCreateMutex();
     devcli_lock = xSemaphoreCreateMutex();
+    queue_scan_results = xQueueCreate(scanresult_queue_length, sizeof(ServerInfo));
     auto status = xTaskCreate(tfunc_alarm, "alarm", alarm_task_stack_size, NULL, 1, &task_alarm);
     if (status!=pdPASS){
         log_e("create task failed: %d", status);
@@ -643,13 +650,18 @@ void setup(){
     }
     status = xTaskCreate(tfunc_scanner, "scanner", scanner_task_stack_size, NULL, 1, &task_scanner);
     if (status!=pdPASS){
-        log_e("create task failed");
+        log_e("create task failed: %d", status);
         ESP_ERROR_CHECK(EXC_CREATE_SCANNER_TASK_FAILED);
     }
     status = xTaskCreate(tfunc_ui, "ui", ui_task_stack_size, nullptr, 1, &task_ui);
     if (status!=pdPASS){
-        log_e("create task failed");
+        log_e("create task failed: %d", status);
         ESP_ERROR_CHECK(EXC_CREATE_UI_TASK_FAILED);
+    }
+    status = xTaskCreate(tfunc_devlst_updater, "devlstu", devlst_updater_task_stack_size, NULL, 1, &task_devlst_updater);
+    if (status!=pdPASS){
+        log_e("create task failed: %d", status);
+        ESP_ERROR_CHECK(EXC_CREATE_DEVLST_UPDATER_TASK_FAILED);
     }
 #endif
 #pragma endregion

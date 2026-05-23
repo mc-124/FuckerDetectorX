@@ -71,8 +71,6 @@ void command_receiver(){
     else if (byte=='\r'){
         return;
     }
-    // /// @test serial
-    // Serial.printf("Serial.read -> %d\n", byte);
     /*
         27: Esc
         127: Backspace
@@ -96,14 +94,12 @@ void command_receiver(){
             }
             else if (byte=='\b'||byte==0x7f){ // backspace
                 if (command_operator_length){
-                    //Serial.print('\b');
                     __backspace();
                     command_operator_buffer[
                         --command_operator_length
                     ] = 0;
                 }
                 else {
-                    //Serial.print('\b');
                     __backspace();
                     reset_command_receiver();
                 }
@@ -135,12 +131,10 @@ void command_receiver(){
                 size_t& param_len = command_paramlist_length[command_param_count-1];
                 if (param_len){
                     command_paramlist_buffer[command_param_count-1][--param_len] = 0;
-                    //Serial.print('\b');
                     __backspace();
                 }
                 else {
                     command_param_count--;
-                    //Serial.print('\b');
                     __backspace();
                     if (!command_param_count){
                         cmdrcvflags = CmdRcvFlags::OPERATOR;
