@@ -86,7 +86,7 @@ IMPL_CMD_HANDLER(setdate){
 
 IMPL_CMD_HANDLER(settime){
     CMD_CHK_LEN(3);
-    if (command_paramlist_length[0]&&command_paramlist_length[1]&&command_paramlist_buffer[2]){
+    if (command_paramlist_length[0]&&command_paramlist_length[1]&&command_paramlist_length[2]){
         CMD_PARSE_INT_PARAM(0);
         CMD_PARSE_INT_PARAM(1);
         CMD_PARSE_INT_PARAM(2);
@@ -153,7 +153,7 @@ IMPL_CMD_HANDLER(addsleep){
         log_e("sleep interval array is full");
         return;
     }
-    if (0<=param0&&param0<=86400&&0<=param1&&param1<=86400&&param0!=param1){
+    if (0<=param0&&param0<86400&&0<=param1&&param1<86400&&param0!=param1){
         free_slot->start_sec = param0;
         free_slot->end_sec = param1;
         uint8_t start_hour = param0/3600;

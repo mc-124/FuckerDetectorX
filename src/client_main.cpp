@@ -185,7 +185,7 @@ void init_client_data(){
     log_i("create queue and mutex");
     lock_ble = xSemaphoreCreateMutex();
     lock_devlst = xSemaphoreCreateMutex();
-    lock_devlst = xSemaphoreCreateMutex();
+    lock_devcli = xSemaphoreCreateMutex();
     mail_diupdate = xQueueCreate(2, sizeof(AdDeviceInfo));
 }
 
@@ -193,7 +193,7 @@ void init_client_tasks(){
     BaseType_t status;
     auto errchk = [status](const char* task_name){
         if (status!=pdPASS){
-            log_e("create task \"%s\" failed: %d", status, task_name);
+            log_e("create task \"%s\" failed: %d", task_name, task_name);
             ESP_ERROR_CHECK(EXC_CREATE_TASK_FAILED);
         }
         else {
@@ -205,7 +205,7 @@ void init_client_tasks(){
     errchk("alarm");
     status = xTaskCreate(tf_scanner, "scanner", scanner_task_stack_size, NULL, 1, &th_scanner);
     errchk("scanner");
-    status = xTaskCreate(tf_ui, "ui", scanner_task_stack_size, NULL, 1, &th_ui);
+    status = xTaskCreate(tf_ui, "ui", ui_task_stack_size, NULL, 1, &th_ui);
     errchk("ui");
     status = xTaskCreate(tf_diupdate, "diupdate", diupdate_task_stack_size, NULL, 1, &th_diupdate);
     errchk("diupdate");

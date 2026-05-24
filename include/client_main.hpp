@@ -11,7 +11,7 @@
 #include <cstring>
 
 #include "error.hpp"
-#include "common.h"
+#include "common.hpp"
 #include "time.hpp"
 #include "ble.hpp"
 #include "serial_cmd.hpp"

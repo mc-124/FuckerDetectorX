@@ -28,11 +28,11 @@ class DaySeconds {
     inline operator int(){return this->__dayseconds;}
     inline DaySeconds operator+(const DaySeconds& ds)const{
         int r=this->__dayseconds+ds.__dayseconds;
-        return r>86400?r-86400:r;
+        return r%86400;
     }
     inline DaySeconds operator-(const DaySeconds& ds)const{
         int r=this->__dayseconds-ds.__dayseconds;
-        return r<0?r+86400:r;
+        return r%86400;
     }
     inline operator int()const{
         return this->__dayseconds;
@@ -47,7 +47,7 @@ class DaySeconds {
 };
 static_assert(sizeof(DaySeconds)==4,"dayseconds struct error");
 
-inline uint32_t seconds(){return esp_timer_get_time()/1000;}
+inline uint32_t seconds(){return esp_timer_get_time()/1000000;}
 DaySeconds get_dayseconds();
 // 校准
 void calibrate_dayseconds(const DaySeconds& now);
