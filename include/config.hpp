@@ -59,7 +59,7 @@
 static_assert(sizeof(int)==4,"arch error");
 
 // Year[2] Month[2] Day[2] SubVersion[2]
-#define FIRMWARE_VERSION 26052403
+#define FIRMWARE_VERSION 260606
 
 /* Board: ESP32-C3 SuperMini/ProMini
    _____________
@@ -75,20 +75,20 @@ static_assert(sizeof(int)==4,"arch error");
 */
 
 enum {
-    FWPIN_VBAT=0,   // ADC
-    FWPIN_FUNCT=1,  // WAKEUP SOURCE
+    FWPIN_FUNCT=0,  // WAKEUP SOURCE
+    FWPIN_VBAT=1,   // ADC
     // pin 2: strapping
-    FWPIN_BTN_BEGIN_CLI=3,    // 需要 10k 上拉电阻防止误触发
-#if FW_SERVER
+    #if FW_SERVER
     FWPIN_SW_ALWAY_ENABLE=4,
-#else
-#endif
+    #else
+    #endif
     FWPIN_EN_DEV=5, // HOLD
     FWPIN_IIC_SDA=6,
     FWPIN_IIC_SCL=7,
     FWPIN_LED=8,
     FWPIN_BOOT=9,
-    FWPIN_EN_VBAT=10,    
+    FWPIN_BTN_BEGIN_CLI=10,    // 需要 10k 上拉电阻防止误触发
+    //FWPIN_EN_VBAT=10,    
     FWPIN_UART_RX=20,
     FWPIN_UART_TX=21,
 };

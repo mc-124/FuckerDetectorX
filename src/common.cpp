@@ -5,10 +5,10 @@ AT24C32 eeprom(eeprom_iic_address, Wire);
 #endif
 
 float read_battery_voltage(){
-    digitalWrite(FWPIN_EN_VBAT, 1); // 使能电池正极上拉电阻
-    delay(1);                       // 电线电容充电
+    //digitalWrite(FWPIN_EN_VBAT, 1); // 使能电池正极上拉电阻
+    //delay(1);                       // 电线电容充电
     uint16_t rawvbat = analogRead(FWPIN_VBAT);
-    digitalWrite(FWPIN_EN_VBAT, 0); // 关闭电池正极上拉电阻
+    //digitalWrite(FWPIN_EN_VBAT, 0); // 关闭电池正极上拉电阻
     return rawvbat*(3.3/4095)*2; // 1/2分压
 }
 
