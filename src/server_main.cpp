@@ -20,29 +20,28 @@ void tf_server_main(void*){
     if (!digitalRead(FWPIN_SW_ALWAY_ENABLE)){
         log_i("alway enable");
         dev_enabled = true;
-        sleep_time = DaySeconds(30) - now;
+        sleep_time = DaySeconds(30) - DaySeconds(now);
     }
     else {
         SleepInterval* si = find_in_progress_interval(now);
         if (si){
-            dev_enabled = true;
             sleep_time = si->end_sec - now;
-            log_i("found in progress interval: (%d, %d)", si->start_sec, si->end_sec);
+            log_i("found in progress interval: (%d, %d) -> %d", int(si->start_sec), int(si->end_sec), int(sleep_time));
         }
         else {
             si = find_next_sleep_interval(now);
             if (si){
                 sleep_time = si->start_sec - now;
-                log_i("found next interval: (%d, %d)", si->start_sec, si->end_sec);
+                dev_enabled = true;
+                log_i("found next interval: (%d, %d) -> %d", int(si->start_sec), int(si->end_sec), int(sleep_time));
             }
             else {
-                log_w("avaliable interval not found");
-                sleep_time = DaySeconds(30) - now;
+                sleep_time = DaySeconds(30) - DaySeconds(now);
                 dev_enabled = true;
+                log_w("avaliable interval not found: -> %d", int(sleep_time));
             }
         }
     }
-    log_i("sleep_time=%d", sleep_time);
     server_begin_sleep(dev_enabled, sleep_time);
     vTaskDelete(NULL);
 }
@@ -52,41 +51,53 @@ void server_begin_sleep(bool dev_enabled, const DaySeconds sleep_time){
     esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
     gpio_hold_dis(static_cast<gpio_num_t>(FWPIN_EN_DEV));
     if (dev_enabled){
-        if (!digitalRead(FWPIN_EN_DEV)){
-            log_i("enable dev");
-            digitalWrite(FWPIN_EN_DEV, 1);
-            esp_sleep_enable_timer_wakeup(ld1040_init_time);
-            gpio_hold_en(static_cast<gpio_num_t>(FWPIN_EN_DEV));
+        log_i("enable dev");
+        digitalWrite(FWPIN_EN_DEV, 1);
+        log_i("waiting dev ready ...");
+        esp_sleep_enable_timer_wakeup(ld1040_init_time*1000);
+        gpio_hold_en(static_cast<gpio_num_t>(FWPIN_EN_DEV));
+        esp_light_sleep_start();
+        uint32_t wait_counter = 0;
+        while (digitalRead(FWPIN_FUNCT)){
+            log_i("waiting dev out low ... (%d)", wait_counter++);
+            esp_sleep_enable_timer_wakeup(1000000);
             esp_light_sleep_start();
-            gpio_hold_dis(static_cast<gpio_num_t>(FWPIN_EN_DEV));
-            esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
         }
+        gpio_hold_dis(static_cast<gpio_num_t>(FWPIN_EN_DEV));
+        esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+        log_i("ok");
         esp_deep_sleep_enable_gpio_wakeup(1ULL<<uint32_t(FWPIN_FUNCT), ESP_GPIO_WAKEUP_GPIO_HIGH);
     }
     else {
+        log_i("disable dev");
         digitalWrite(FWPIN_EN_DEV, 0);
     }
+    log_i("begin sleep. delay=%d", int(sleep_time));
     Serial.flush();
     Serial.end();
     Wire.flush();
     Wire.end();
     gpio_hold_en(static_cast<gpio_num_t>(FWPIN_EN_DEV));
+    gpio_deep_sleep_hold_en();
     esp_sleep_enable_timer_wakeup(static_cast<int>(sleep_time)*1000000);
-    esp_deep_sleep_start();        
+    esp_deep_sleep_start();
 }
 
 void init_server_io(){
     esp_reset_reason_t reset_reason = esp_reset_reason();
+    pinMode(FWPIN_SW_ALWAY_ENABLE, INPUT);
+    gpio_deep_sleep_hold_dis();
     gpio_hold_dis(static_cast<gpio_num_t>(FWPIN_EN_DEV));
+    pinMode(FWPIN_EN_DEV, OUTPUT);
+    pinMode(FWPIN_FUNCT, INPUT);
+    digitalWrite(FWPIN_EN_DEV, 0);
     if (reset_reason==ESP_RST_DEEPSLEEP){
         log_i("reset_reason: DEEPSLEEP");
     }
     else {
         log_i("reset_reason: %d", reset_reason);
-        pinMode(FWPIN_EN_DEV, OUTPUT);
-        gpio_deep_sleep_hold_en();
-        load_sleep_intervals();
     }
+    load_sleep_intervals();
 }
 
 void init_server_devices(){

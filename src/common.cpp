@@ -4,12 +4,26 @@
 AT24C32 eeprom(eeprom_iic_address, Wire);
 #endif
 
+#include "adcplus.hpp"
+
 float read_battery_voltage(){
     //digitalWrite(FWPIN_EN_VBAT, 1); // 使能电池正极上拉电阻
     //delay(1);                       // 电线电容充电
-    uint16_t rawvbat = analogRead(FWPIN_VBAT);
-    //digitalWrite(FWPIN_EN_VBAT, 0); // 关闭电池正极上拉电阻
-    return rawvbat*(3.3/4095)*2; // 1/2分压
+    //uint16_t rawvbat = analogRead(FWPIN_VBAT);
+    ////digitalWrite(FWPIN_EN_VBAT, 0); // 关闭电池正极上拉电阻
+    //float f32vbat = rawvbat*(3.3/4095)*2;
+    //if constexpr(vbat_mul) {
+    //    f32vbat *= vbat_mul;
+    //}
+    //if constexpr(vbat_add) {
+    //    f32vbat += vbat_add;
+    //}
+    //return f32vbat; // 1/2分压
+    float vb = read_adc_voltage(static_cast<gpio_num_t>(FWPIN_VBAT))*2;
+    if constexpr(vbat_mul){
+        vb *= vbat_mul;
+    }
+    return vb;
 }
 
 #if FW_SERVER

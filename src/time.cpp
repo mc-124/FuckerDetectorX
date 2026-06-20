@@ -18,7 +18,10 @@ RTC_DATA_ATTR static bool sleep_interval_array_is_loaded = false;
 RTC_DATA_ATTR SleepInterval sleep_interval_array[sleep_interval_array_size];
 
 void load_sleep_intervals(){
-    if (sleep_interval_array_is_loaded) return;
+    if (sleep_interval_array_is_loaded) {
+        log_i("sleep interval is loaded");
+        return;
+    }
     log_i("Loading sleep interval array");
     eeprom.readBuffer(sleep_interval_eeprom_address, 
         reinterpret_cast<uint8_t*>(sleep_interval_array),

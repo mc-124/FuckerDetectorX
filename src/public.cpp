@@ -26,39 +26,40 @@ IMPL_CMD_HANDLER(help){
         "=== HELP ===\r\n"
         "/exit: exit CLI and restart system\r\n"
         "/help: print this message\r\n"
-        "/info: print chip information\r\n"
+        "/version: print firmware version and chip information\r\n"
+        "/vbat: print battery voltage\r\n"
 #if FW_SERVER
         "/setdate <year> <month> <day>: set RTC date\r\n"
         "/settime <hour> <minute> <second>: set RTC time\r\n"
         "/getdatetime: print time\r\n"
-        "/lssleep: print all sleep interval\r\n"
+        "/lssleep: print all sleep intervals\r\n"
         "/addsleep <begin_sec> <end_sec>: append new sleep interval\r\n"
         "/delsleep <index>: remove a exists sleep interval\r\n"
-        "/save: save modify\r\n"
+        "/savesleep: save modifies to sleep intervals\r\n"
 #else
 #endif
     );
 }
 
-IMPL_CMD_HANDLER(info){
+IMPL_CMD_HANDLER(version){
     CMD_CHK_LEN(0);
-    if constexpr(FW_SERVER){
-        Serial.println("type: server");
-    }
-    else {
-        Serial.println("type: client");
-    }
-    Serial.println("version: " STRINGIFY(FIRMWARE_VERSION));
-    Serial.println("log level: " FW_LOG_LEVEL);
-    Serial.println("compile time: " __TIMESTAMP__);
-    float vbat = read_battery_voltage();
-    Serial.printf("battery voltage: %.2f\r\n", vbat);
-    Serial.println("arduino version: " STRINGIFY(ARDUINO));
-    Serial.println("sdk version: " 
-        STRINGIFY(ESP_IDF_VERSION_MAJOR) "."
-        STRINGIFY(ESP_IDF_VERSION_MINOR) "."
-        STRINGIFY(ESP_IDF_VERSION_PATCH)
+    Serial.println("FuckerDetectorX [" FW_REPO_URL "]");
+    Serial.println(
+        "  Firmware version: " STRINGIFY(FIRMWARE_VERSION) "\r\n"
+        "  Firmware log level: " FW_LOG_LEVEL "\r\n"
+        "  Firmware compile time: " __TIMESTAMP__ "\r\n"
+        "  Arduino version: " STRINGIFY(ARDUINO) "\r\n"
+        "  ESP-IDF version: " 
+            STRINGIFY(ESP_IDF_VERSION_MAJOR) "."
+            STRINGIFY(ESP_IDF_VERSION_MINOR) "."
+            STRINGIFY(ESP_IDF_VERSION_PATCH) "\r\n"
     );
+}
+
+IMPL_CMD_HANDLER(vbat){
+    CMD_CHK_LEN(0);
+    float vb = read_battery_voltage();
+    Serial.printf("Battery voltage: %.2fV\r\n", vb);
 }
 
 #if FW_SERVER
@@ -114,7 +115,7 @@ IMPL_CMD_HANDLER(getdatetime){
 IMPL_CMD_HANDLER(lssleep){
     CMD_CHK_LEN(0);
     const DaySeconds now = get_dayseconds();
-    Serial.printf("now: %d",int(now));
+    Serial.printf("now: %d\r\n",int(now));
     for(uint8_t index=0;index<sleep_interval_array_size;index++){
         const auto& si = sleep_interval_array[index];
         if (si.is_available()){
@@ -186,7 +187,7 @@ IMPL_CMD_HANDLER(delsleep){
     }
 }
 
-IMPL_CMD_HANDLER(save){
+IMPL_CMD_HANDLER(savesleep){
     CMD_CHK_LEN(0);
     store_sleep_intervals();
 }
@@ -201,13 +202,23 @@ IMPL_CMD_HANDLER(save){
 
 #pragma region Init
 
+#if FW_SERVER
+extern void init_server_io();
+extern void init_server_devices();
+#endif
+
 void init_cli(){
     if (!digitalRead(FWPIN_BTN_BEGIN_CLI)){
+#if FW_SERVER
+        init_server_io();
+        init_server_devices();
+#endif
 #define SET_CMD_HANDLER(__name) command_handler_map[#__name]=cmd_handler::__name;
-        log_i("begin cli");
+        Serial.println("Begin CLI. type '/help' for more info.");
         SET_CMD_HANDLER(exit);
         SET_CMD_HANDLER(help);
-        SET_CMD_HANDLER(info);
+        SET_CMD_HANDLER(version);
+        SET_CMD_HANDLER(vbat);
 #if FW_SERVER
         SET_CMD_HANDLER(setdate);
         SET_CMD_HANDLER(settime);
@@ -215,7 +226,7 @@ void init_cli(){
         SET_CMD_HANDLER(lssleep);
         SET_CMD_HANDLER(addsleep);
         SET_CMD_HANDLER(delsleep);
-        SET_CMD_HANDLER(save);
+        SET_CMD_HANDLER(savesleep);
 #else
 #endif
 #undef SET_CMD_HANDLER
@@ -227,7 +238,7 @@ void init_cli(){
 }
 
 void init_pub_io(){
-    pinMode(FWPIN_EN_VBAT, OUTPUT);
+    //pinMode(FWPIN_EN_VBAT, OUTPUT);
     pinMode(FWPIN_LED, OUTPUT);
     pinMode(FWPIN_BOOT, INPUT);
     pinMode(FWPIN_BTN_BEGIN_CLI, INPUT);

@@ -5,6 +5,7 @@ import sys
 import subprocess
 import threading
 import os
+import shutil
 
 BOARD = "esp32:esp32:esp32c3"
 
@@ -92,7 +93,31 @@ if __name__=='__main__':
                 cfg = f.readlines()
             compile_sketch(cfg,'./compile_server.log','./build/server',preproc_flags)
             sys.exit(0)
-    print(f"Usage: \"{sys.argv[0]}\" <mode:server|client>")
+        elif mode == 'clean-all':
+            if os.path.isdir("./build"):
+                print("Removing")
+                shutil.rmtree('./build')
+            else:
+                print("Not found")
+            sys.exit(0)
+        elif mode == 'clean-client':
+            if os.path.isdir('./build/client'):
+                print("Removing")
+                shutil.rmtree("./build/client")
+        elif mode == 'clean-server':
+            if os.path.isdir('./build/server'):
+                print("Removing")
+                shutil.rmtree("./build/server")
+            else:
+                print("Not found")
+            sys.exit(0)
+        else:
+            print(f"ERROR: unknown mode: {sys.argv[1]}")
+    print(f"Usage: \"{sys.argv[0]}\" <mode>")
+    print("  mode:")
+    print("    'client': build client firmware")
+    print("    'server': build server firmware")
+    print("    'clean-all': remove all build result")
+    print("    'clean-client': remove client build result")
+    print("    'clean-server': remove server build result")
     sys.exit(1)
-        
-    

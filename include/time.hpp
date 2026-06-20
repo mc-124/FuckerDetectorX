@@ -23,16 +23,19 @@ class DaySeconds {
     int __dayseconds;
     public:
     inline DaySeconds(void):__dayseconds(0){}
-    inline DaySeconds(int sec):__dayseconds(sec){}  // 注意要先 %86400
-    inline DaySeconds(const DaySeconds& ds):__dayseconds(ds.__dayseconds){}
+    inline DaySeconds(int sec):__dayseconds(sec%86400){}
+    inline DaySeconds(const DaySeconds& ds):__dayseconds(ds.__dayseconds%86400){}
     inline operator int(){return this->__dayseconds;}
     inline DaySeconds operator+(const DaySeconds& ds)const{
         int r=this->__dayseconds+ds.__dayseconds;
         return r%86400;
     }
     inline DaySeconds operator-(const DaySeconds& ds)const{
-        int r=this->__dayseconds-ds.__dayseconds;
-        return r%86400;
+        int r=this->__dayseconds-ds.__dayseconds%86400;
+        if (r < 0){
+            r += 86400;
+        }
+        return r;
     }
     inline operator int()const{
         return this->__dayseconds;

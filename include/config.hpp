@@ -41,7 +41,7 @@
 #warning __IN_VSCODE
 
 //////////////////////////////
-#define FW_SERVER 0
+#define FW_SERVER 1
 //////////////////////////////
 
 #else
@@ -59,7 +59,9 @@
 static_assert(sizeof(int)==4,"arch error");
 
 // Year[2] Month[2] Day[2] SubVersion[2]
-#define FIRMWARE_VERSION 260606
+#define FIRMWARE_VERSION 26061900
+
+#define FW_REPO_URL "https://github.com/mc-124/FuckerDetectorX"
 
 /* Board: ESP32-C3 SuperMini/ProMini
    _____________
@@ -79,7 +81,7 @@ enum {
     FWPIN_VBAT=1,   // ADC
     // pin 2: strapping
     #if FW_SERVER
-    FWPIN_SW_ALWAY_ENABLE=4,
+    FWPIN_SW_ALWAY_ENABLE=3,
     #else
     #endif
     FWPIN_EN_DEV=5, // HOLD
@@ -97,10 +99,12 @@ constexpr char ble_server_name[] = "FuckerDetectorX";
 //constexpr char ble_client_name[] = "FuckerDetectorX";
 #define ble_client_name ble_server_name
 
+constexpr float vbat_mul = 1.044;
+
 #if FW_SERVER
 
 constexpr uint8_t sleep_interval_array_size = 16;
-constexpr uint8_t eeprom_iic_address = 0x50;
+constexpr uint8_t eeprom_iic_address = 0b1010111;
 constexpr uint16_t sleep_interval_eeprom_address = 0xeff;
 constexpr auto ble_device_name = ble_server_name;
 constexpr uint32_t ld1040_init_time = 7500; // ms
