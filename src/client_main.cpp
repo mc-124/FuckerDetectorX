@@ -21,6 +21,15 @@ void tf_buttonloop(void*){
     }
 }
 
+void vibration(){
+    for (uint32_t i=0;i<vibration_freq;i++){
+        digitalWrite(FWPIN_EN_DEV, 1);
+        delay(vibration_en_time);
+        digitalWrite(FWPIN_EN_DEV, 0);
+        delay(vibration_dis_time);
+    }
+}
+
 void tf_alarmloop(void*){
     static uint32_t last_alarm = seconds();
     for(;;){
@@ -33,12 +42,10 @@ void tf_alarmloop(void*){
             last_alarm = now;
         }
         for(uint8_t i=0;i<vibration_loop_number;i++){
-            digitalWrite(FWPIN_EN_DEV, 1);
             led(1);
-            delay(vibration_en_time);
-            digitalWrite(FWPIN_EN_DEV, 0);
+            vibration();
             led(0);
-            delay(vibration_dis_time);
+            delay(vibration_timeout);
         }
     }
 }
@@ -115,6 +122,7 @@ void init_client_devices(){
     oled.println("V: " STRINGIFY(FIRMWARE_VERSION));
     oled.invertDisplay(true);
     oled.display();
+    vibration();
     delay(3000);
     oled.invertDisplay(false);
     oled.clearDisplay();

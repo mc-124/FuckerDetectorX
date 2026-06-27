@@ -41,6 +41,8 @@ extern TaskHandle_t task_alarmloop;
 
 extern AdvDeviceInfo scan_result;
 
+void vibration();
+
 void tf_buttonloop(void*);
 void tf_alarmloop(void*);
 void active_alarm();

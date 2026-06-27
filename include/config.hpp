@@ -61,7 +61,7 @@
 static_assert(sizeof(int)==4,"arch error");
 
 // Year[2] Month[2] Day[2] SubVersion[2]
-#define FIRMWARE_VERSION 26061901
+#define FIRMWARE_VERSION 26061902
 
 #define FW_REPO_URL "https://github.com/mc-124/FuckerDetectorX"
 
@@ -101,7 +101,7 @@ constexpr char ble_server_name[] = "FuckerDetectorX";
 //constexpr char ble_client_name[] = "FuckerDetectorX";
 #define ble_client_name ble_server_name
 
-constexpr float vbat_mul = 1.044;
+constexpr float vbat_mul = 1.033;
 
 #if FW_SERVER
 
@@ -121,8 +121,10 @@ static_assert(
 #else
 
 constexpr uint32_t buttonloop_delay = 10;
-constexpr uint32_t vibration_en_time = 800;
-constexpr uint32_t vibration_dis_time = 500;
+constexpr uint32_t vibration_freq = 72;
+constexpr uint32_t vibration_en_time = 1;
+constexpr uint32_t vibration_dis_time = 4;
+constexpr uint32_t vibration_timeout = 96;
 constexpr uint8_t vibration_loop_number = 3;
 
 constexpr auto ble_device_name = ble_client_name;
