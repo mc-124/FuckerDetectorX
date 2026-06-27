@@ -24,7 +24,7 @@ static_assert(ARDUHAL_LOG_LEVEL!=ARDUHAL_LOG_LEVEL_NONE,"log level error");
 RTC_DATA_ATTR uint32_t chip_boot_counter = 0;
 
 void setup(){
-    setCpuFrequencyMhz(80);
+    setCpuFrequencyMhz(cpu_freq_mhz);
     chip_boot_counter++;
     Serial.begin(115200);
     delay(5);

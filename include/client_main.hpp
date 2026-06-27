@@ -35,6 +35,7 @@ extern std::atomic_bool scanner_thisround_found;
 extern std::atomic_bool thisloop_transmitadv;
 extern std::atomic<uint8_t> dst_last_update_ui;
 extern AdvDeviceInfo found_dev_lst[found_dev_lst_size];
+extern uint16_t self_mac_hash;
 
 extern TaskHandle_t task_buttonloop;
 extern TaskHandle_t task_alarmloop;
@@ -45,6 +46,7 @@ void vibration();
 
 void tf_buttonloop(void*);
 void tf_alarmloop(void*);
+
 void active_alarm();
 
 void init_client_io();

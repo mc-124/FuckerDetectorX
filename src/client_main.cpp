@@ -8,6 +8,7 @@ std::atomic_bool scanner_thisround_found = false;
 std::atomic_bool thisloop_transmitadv = false;
 std::atomic<uint8_t> dst_last_update_ui = 255;
 AdvDeviceInfo found_dev_lst[found_dev_lst_size];
+uint16_t self_mac_hash;
 
 TaskHandle_t task_buttonloop;
 TaskHandle_t task_alarmloop;
@@ -113,13 +114,19 @@ void init_client_devices(){
         log_e("init SSD1306 failed");
         ESP_ERROR_CHECK(EXC_INIT_OLED_FAILED);
     }
+    auto addr = BLEDevice::getAddress();
+    uint64_t u64addr = 0;
+    memcpy(&u64addr, addr.getNative(), 6);
+    self_mac_hash = u64addr % 0xffff;
     btn_funct.attachDoubleClick(funct_doubleclick);
     oled.clearDisplay();
     oled.setTextColor(SSD1306_WHITE);
-    oled.setCursor(10,20);
+    oled.setCursor(10,16);
     oled.println("FuckerDetectorX");
-    oled.setCursor(10,oled.getCursorY());
-    oled.println("V: " STRINGIFY(FIRMWARE_VERSION));
+    oled.setCursor(12,oled.getCursorY());
+    oled.println("V:" STRINGIFY(FIRMWARE_VERSION));
+    oled.setCursor(12,oled.getCursorY());
+    oled.printf("A:[%04X]\r\n", self_mac_hash);
     oled.invertDisplay(true);
     oled.display();
     vibration();
@@ -145,6 +152,37 @@ void init_client_tasks(){
     xTaskCreate(tf_alarmloop, "almloop", alarmloop_task_stack_size, NULL, NULL, &task_alarmloop);
 }
 
+int get_dev_slot(uint16_t mac_hash){
+    for (uint8_t i=0;i<found_dev_lst_size;i++){
+        auto& dev = found_dev_lst[i];
+        if (dev.valid&&dev.mac_hash==mac_hash){
+            return i;
+        }
+    }
+    return -1;
+}
+
+int get_free_slot(){ // 不可能返回 -1
+    int min = -1;
+    for (uint8_t i=0;i<found_dev_lst_size;i++){
+        auto& dev = found_dev_lst[i];
+        if (!dev.valid){
+            return i;
+        }
+        if (min==-1){
+            min = i;
+        }
+        else {
+            // 找出最早的
+            auto& min_d = found_dev_lst[min];
+            if (dev.now_time<min_d.now_time){
+                min = i;
+            }
+        }
+    }
+    return min==-1? 0:min;
+}
+
 void update_ui(){
     log_i("updating ui");
     auto get_rssi_level_char = [](char rssi){
@@ -163,26 +201,14 @@ void update_ui(){
     oled.clearDisplay();
     oled.setCursor(0,0);
     //oled.println("Test");
-    oled.printf("["STRINGIFY(FIRMWARE_VERSION)"] BAT:% 4.2fV\r\n", read_battery_voltage());
+    oled.printf("V"STRINGIFY(FIRMWARE_VERSION)"|%04X % 4.2fV\r\n", self_mac_hash, read_battery_voltage());
     if (scanner_thisround_found){
-        int min = -1;
-        for (uint8_t i=0;i<found_dev_lst_size;i++){
-            AdvDeviceInfo& dev = found_dev_lst[i];
-            if (!dev.valid) continue;
-            if (scan_result.mac_hash==dev.mac_hash){
-                memcpy(&dev, &scan_result, sizeof(AdvDeviceInfo));
-                cur = i;
-                break;
-            }
-            else if (min==-1||(found_dev_lst+min)->now_time>dev.now_time){
-                min = i;
-            }
+        int di = get_dev_slot(scan_result.mac_hash);
+        if (di==-1){ // new dev
+            di = get_free_slot();
         }
-        if (cur==-1){
-            min = (min==-1)?0:min;
-            memcpy(found_dev_lst+min, &scan_result, sizeof(AdvDeviceInfo));
-            cur = min;
-        }
+        found_dev_lst[di] = scan_result; // copy
+        cur = di;
         scanner_thisround_found = false;
     }
     for (uint8_t i=0;i<found_dev_lst_size;i++){
@@ -195,7 +221,7 @@ void update_ui(){
             oled.setTextColor(SSD1306_BLACK,SSD1306_WHITE);
         }
         if (dev.is_server){
-            oled.printf("<%04x> %02hhu:%02hhu % 4.2fV %c", 
+            oled.printf("<%04X> %02hhu:%02hhu % 4.2fV %c", 
                 dev.mac_hash, 
                 dev.now_time.hours(), 
                 dev.now_time.minute(), 
@@ -204,7 +230,7 @@ void update_ui(){
             );
         }
         else {
-            oled.printf("<%04x>CLIENT % 4hhddBm",
+            oled.printf("<%04X>CLIENT % 4hhddBm",
                 dev.mac_hash,
                 dev.rssi
             );

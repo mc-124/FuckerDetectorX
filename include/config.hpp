@@ -61,7 +61,7 @@
 static_assert(sizeof(int)==4,"arch error");
 
 // Year[2] Month[2] Day[2] SubVersion[2]
-#define FIRMWARE_VERSION 26061902
+#define FIRMWARE_VERSION 26061903
 
 #define FW_REPO_URL "https://github.com/mc-124/FuckerDetectorX"
 
@@ -118,6 +118,8 @@ static_assert(
     "eeprom address error"
 );
 
+constexpr uint32_t cpu_freq_mhz = 80;
+
 #else
 
 constexpr uint32_t buttonloop_delay = 10;
@@ -139,6 +141,9 @@ constexpr uint32_t alarmloop_task_stack_size = 512*4;
 
 constexpr uint8_t update_ui_max_dst = 16;
 constexpr uint32_t alarm_timeout = 5;
+
+constexpr uint32_t cpu_freq_mhz = 80;
+// 不知道为什么改成 40MHz 会卡住
 
 #endif
 
