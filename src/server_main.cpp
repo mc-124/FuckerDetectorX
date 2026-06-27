@@ -1,6 +1,8 @@
 #include "server_main.hpp"
 #if FW_SERVER
 
+AT24C32 eeprom(eeprom_iic_address, Wire);
+
 TaskHandle_t th_server_main;
 
 void tf_server_main(void*){
@@ -112,6 +114,6 @@ void init_server_task(){
     }
 }
 
-//void server_loop(){}
+void loop(){}
 
 #endif

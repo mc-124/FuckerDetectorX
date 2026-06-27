@@ -24,6 +24,7 @@ static_assert(ARDUHAL_LOG_LEVEL!=ARDUHAL_LOG_LEVEL_NONE,"log level error");
 RTC_DATA_ATTR uint32_t chip_boot_counter = 0;
 
 void setup(){
+    setCpuFrequencyMhz(80);
     chip_boot_counter++;
     Serial.begin(115200);
     delay(5);
@@ -46,8 +47,4 @@ void setup(){
     log_i("setup returned");
 }
 
-void loop(){
-#if !FW_SERVER
-    client_loop();
-#endif
-}
+// loop() 被移到 client_main 和 server_main

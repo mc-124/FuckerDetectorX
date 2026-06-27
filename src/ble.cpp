@@ -22,7 +22,7 @@ static void generate_advertising_intervals(){
 }
 
 void init_ble(){
-    log_i("Init BLE");
+    log_i("Init BLE. adv_imax=%hu adv_imin=%hu", adv_max_interval, adv_min_interval);
     BLEDevice::init(ble_device_name);
     BLEDevice::setPower(ESP_PWR_LVL_P20); // 最大发射功率 +21被废弃
     p_bleserver = BLEDevice::createServer();
@@ -37,6 +37,7 @@ void init_ble(){
     //p_blescan->setActiveScan(true);
     p_blescan->setAdvertisedDeviceCallbacks(&advdev_callbacks);
     p_blescan->setInterval(scan_interval);
+    p_blescan->setWindow(scan_window);
 #endif
 }
 

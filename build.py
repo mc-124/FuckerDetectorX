@@ -104,6 +104,9 @@ if __name__=='__main__':
             if os.path.isdir('./build/client'):
                 print("Removing")
                 shutil.rmtree("./build/client")
+            else:
+                print("Not found")
+            sys.exit(0)
         elif mode == 'clean-server':
             if os.path.isdir('./build/server'):
                 print("Removing")

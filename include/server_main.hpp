@@ -15,8 +15,6 @@
 #include "ble.hpp"
 #include "public.hpp"
 
-// 把服务器主函数和loopTask分离，避免阻塞loopTask导致蓝牙栈错误
-
 extern TaskHandle_t th_server_main;
 
 void tf_server_main(void*);
@@ -26,6 +24,6 @@ void init_server_io();
 void init_server_devices();
 void init_server_task();
 
-//void server_loop();
+void loop();
 
 #endif

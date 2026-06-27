@@ -1,9 +1,5 @@
 #include "common.hpp"
 
-#if FW_SERVER
-AT24C32 eeprom(eeprom_iic_address, Wire);
-#endif
-
 #include "adcplus.hpp"
 
 float read_battery_voltage(){
@@ -26,14 +22,6 @@ float read_battery_voltage(){
     return vb;
 }
 
-#if FW_SERVER
-#else
-
-Adafruit_SSD1306 oled(128,64,&Wire);
-OneButton btn_funct(FWPIN_FUNCT,true,false);
-
-#endif
-
 static char hexdig[17] = "0123456789ABCDEF";
 
 void int_to_string_buf(uint8_t u8, char **buf){
@@ -43,14 +31,14 @@ void int_to_string_buf(uint8_t u8, char **buf){
 
 // LSB only
 
-void int_to_string_buf(uint16_t u16, char **buf){
-    int_to_string_buf(uint8_t(u16>>8), buf);
-    int_to_string_buf(uint8_t(u16), buf);
-}
-
-void int_to_string_buf(uint32_t u32, char **buf){
-    int_to_string_buf(uint8_t(u32>>24), buf);
-    int_to_string_buf(uint8_t(u32>>16), buf);
-    int_to_string_buf(uint8_t(u32>>8), buf);
-    int_to_string_buf(uint8_t(u32), buf);
-}
+//void int_to_string_buf(uint16_t u16, char **buf){
+//    int_to_string_buf(uint8_t(u16>>8), buf);
+//    int_to_string_buf(uint8_t(u16), buf);
+//}
+//
+//void int_to_string_buf(uint32_t u32, char **buf){
+//    int_to_string_buf(uint8_t(u32>>24), buf);
+//    int_to_string_buf(uint8_t(u32>>16), buf);
+//    int_to_string_buf(uint8_t(u32>>8), buf);
+//    int_to_string_buf(uint8_t(u32), buf);
+//}

@@ -40,6 +40,9 @@ class DaySeconds {
     inline operator int()const{
         return this->__dayseconds;
     }
+    inline uint8_t hours(){return this->__dayseconds/3600;}
+    inline uint8_t minute(){return (this->__dayseconds%3600)/60;}
+    inline uint8_t second(){return this->__dayseconds%60;}
 #define __DEF_CMP(__symbol) \
     inline bool operator __symbol (const DaySeconds& ds)const \
         {return this->__dayseconds __symbol ds.__dayseconds;}

@@ -41,7 +41,7 @@
 #warning __IN_VSCODE
 
 //////////////////////////////
-#define FW_SERVER 1
+#define FW_SERVER 0
 //////////////////////////////
 
 #else
@@ -56,10 +56,12 @@
 #define FW_TYPE_STRING "Client"
 #endif
 
+#define SSD1306_NO_SPLASH 1
+
 static_assert(sizeof(int)==4,"arch error");
 
 // Year[2] Month[2] Day[2] SubVersion[2]
-#define FIRMWARE_VERSION 26061900
+#define FIRMWARE_VERSION 26061901
 
 #define FW_REPO_URL "https://github.com/mc-124/FuckerDetectorX"
 
@@ -118,15 +120,23 @@ static_assert(
 
 #else
 
+constexpr uint32_t buttonloop_delay = 10;
+constexpr uint32_t vibration_en_time = 800;
+constexpr uint32_t vibration_dis_time = 500;
+constexpr uint8_t vibration_loop_number = 3;
+
 constexpr auto ble_device_name = ble_client_name;
 constexpr uint8_t ssd1306_i2c_address = 0x3c;
-constexpr uint32_t scan_interval = 48;
-constexpr uint32_t scanner_task_stack_size = 8192*4;
-constexpr uint32_t alarm_task_stack_size = 800*4;
-constexpr uint8_t devsrv_lst_len = 6;
-constexpr uint32_t ui_task_stack_size = 2560*4;
-constexpr uint32_t diupdate_task_stack_size = 1024*4;
+constexpr uint32_t scan_interval = 120;
+constexpr uint32_t scan_window = 100;
 constexpr uint32_t scanresult_queue_length = 4;
+constexpr uint8_t found_dev_lst_size = 7;
+
+constexpr uint32_t buttonloop_task_stack_size = 512*4;
+constexpr uint32_t alarmloop_task_stack_size = 512*4;
+
+constexpr uint8_t update_ui_max_dst = 16;
+constexpr uint32_t alarm_timeout = 5;
 
 #endif
 

@@ -1,171 +1,103 @@
 #include "client_main.hpp"
 #if !FW_SERVER
 
-SemaphoreHandle_t lock_ble;
-SemaphoreHandle_t lock_devlst;
-SemaphoreHandle_t lock_devcli;
-QueueHandle_t mail_diupdate;
-TaskHandle_t th_alarm;
-TaskHandle_t th_scanner;
-TaskHandle_t th_ui;
-TaskHandle_t th_diupdate;
+Adafruit_SSD1306 oled(128,64,&Wire);
+OneButton btn_funct(FWPIN_FUNCT,true,false);
 
-std::atomic<bool> thisround_is_founded = false;
+std::atomic_bool scanner_thisround_found = false;
+std::atomic_bool thisloop_transmitadv = false;
+std::atomic<uint8_t> dst_last_update_ui = 255;
+AdvDeviceInfo found_dev_lst[found_dev_lst_size];
 
-AdDeviceInfo devsrv_info[devsrv_lst_len];
-AdDeviceInfo devcli_info;
+TaskHandle_t task_buttonloop;
+TaskHandle_t task_alarmloop;
 
-void tf_alarm(void*){
-    log_i("task is running: tf_alarm");
-    auto alarming = [](bool state){        
-        digitalWrite(FWPIN_EN_DEV, state);
-        led(state);
-    };
-    for (;;){
+AdvDeviceInfo scan_result;
+
+void tf_buttonloop(void*){
+    for(;;){
+        btn_funct.tick();
+        delay(buttonloop_delay);
+    }
+}
+
+void tf_alarmloop(void*){
+    static uint32_t last_alarm = seconds();
+    for(;;){
         xTaskNotifyWait(0,0,NULL,portMAX_DELAY);
-        log_i("alarming");
-        for (uint8_t i=0;i<3;i++){
-            alarming(1);
-            delay(600);
-            alarming(0);
-            delay(200);
+        uint32_t now = seconds();
+        if (now-last_alarm<alarm_timeout){
+            continue;
         }
-        delay(600); // total: 30000s
-        thisround_is_founded = false;
-    }
-}
-
-void tf_scanner(void*){
-    log_i("task is running: tf_scanner");
-    for (;;){
-        xSemaphoreTake(lock_ble, portMAX_DELAY);
-        log_i("scanning");
-        p_blescan->start(0);
-        log_i("scan stopped");
-        xSemaphoreGive(lock_ble);
-        delay(1);
-    }
-}
-
-void tf_ui(void*){
-    log_i("task is running: tf_ui");
-    for (;;){
-        xTaskNotifyWait(0,0,NULL,60*1000);
-        log_i("update ui");
-        float host_vbat = read_battery_voltage_cached();
-        char mac_str_buf[5];
-        mac_str_buf[4] = 0;
-        oled.clearDisplay();
-        oled.setCursor(0,0);
-        oled.printf("FDX-" STRINGIFY(FIRMWARE_VERSION)"   % 4.2fV\r\n", host_vbat);
-        xSemaphoreTake(lock_devlst, portMAX_DELAY);
-        for (auto& info:devsrv_info){
-            if (info.valid&&0<=int(info.time)&&int(info.time)>86400){
-                char* p = mac_str_buf;
-                int_to_string_buf(uint8_t(info.mac_0), &p);
-                int_to_string_buf(uint8_t(info.mac_1), &p);
-                oled.printf("%s [%02hhu:%02hhu]   %4.2fV\r\n", mac_str_buf, info.mac_0, info.mac_1,
-                    decode_battery_voltage(info.coded_vbat)
-                );
-            }
-            else {
-                Serial.println();
-            }
+        else {
+            last_alarm = now;
         }
-        xSemaphoreGive(lock_devlst);
-        xSemaphoreTake(lock_devcli,portMAX_DELAY);
-        if (devcli_info.valid){
-            char* p = mac_str_buf;
-            int_to_string_buf(uint8_t(devcli_info.mac_0), &p);
-            int_to_string_buf(uint8_t(devcli_info.mac_1), &p);
-            oled.printf("%s         % 3hhddBm", mac_str_buf, -devcli_info.rssi);
-        }
-        xSemaphoreGive(lock_devlst);
-        oled.display();
-    }
-}
-
-void tf_diupdate(void*){
-    log_i("task is running: tf_diupdate");
-    for (;;){
-        AdDeviceInfo devinfo;
-        xQueueReceive(mail_diupdate, &devinfo, portMAX_DELAY);
-        if (devinfo.valid){
-            if (devinfo.is_server){
-                xSemaphoreTake(lock_devlst, portMAX_DELAY);
-                for (auto& info:devsrv_info){
-                    if (!info.valid){ // empty
-                        memcpy(&info, &devinfo, sizeof(AdDeviceInfo));
-                        break;
-                    }
-                }
-                xSemaphoreGive(lock_devlst);
-            }
-            else {
-                xSemaphoreTake(lock_devcli, portMAX_DELAY);
-                memcpy(&devcli_info, &devinfo, sizeof(AdDeviceInfo));
-                xSemaphoreGive(lock_devcli);
-            }
-            update_ui();
+        for(uint8_t i=0;i<vibration_loop_number;i++){
+            digitalWrite(FWPIN_EN_DEV, 1);
+            led(1);
+            delay(vibration_en_time);
+            digitalWrite(FWPIN_EN_DEV, 0);
+            led(0);
+            delay(vibration_dis_time);
         }
     }
-}
-
-void update_ui(){
-    xTaskNotify(th_ui, NULL, eNoAction);
 }
 
 void active_alarm(){
-    xTaskNotify(th_alarm, NULL, eNoAction);
-}
-
-void update_devs(const AdDeviceInfo& info){
-    xQueueSend(mail_diupdate, &info, 0);
+    xTaskNotifyGive(task_alarmloop);
 }
 
 void AdvertisingDevCallbacks::onResult(BLEAdvertisedDevice dev){
-    if (thisround_is_founded){
-        return;
-    }
-    if (dev.haveName()&&dev.haveManufacturerData()&&dev.haveTXPower()&&!dev.haveAppearance()&&!dev.haveServiceUUID()){
-        String name = dev.getName();
-        String rawdata = dev.getManufacturerData();
-        if (rawdata.length()==sizeof(AdvertisingData)
-            &&rawdata[0]==lowByte(adv_company_id)&&rawdata[1]==highByte(adv_company_id)
-            &&(name==ble_server_name||name==ble_client_name)
-        ){
-            const AdvertisingData* data = reinterpret_cast<const AdvertisingData*>(rawdata.c_str());
-            uint8_t mac_buf[6];
-            memcpy(mac_buf, dev.getAddress().getNative(), 6);
-            int l_rssi = dev.haveRSSI()?dev.getRSSI():-127;
-            char rssi;
-            if (l_rssi>127){
-                rssi = 127;
+    if (!scanner_thisround_found
+        &&dev.haveName()&&dev.haveManufacturerData()
+        &&(dev.getName()==ble_client_name||dev.getName()==ble_server_name)
+       ){
+        String raw_manfacture_data = dev.getManufacturerData();
+        if (raw_manfacture_data.length()==sizeof(AdvertisingData)){
+            AdvertisingData data;
+            memcpy(&data, raw_manfacture_data.c_str(), sizeof(AdvertisingData));
+            if (data.company_id==adv_company_id){
+                uint64_t mac = 0;
+                auto raw_mac = dev.getAddress();
+                memcpy(&mac, raw_mac.getNative(), 6);
+                scan_result.valid = true;
+                scan_result.is_server = data.type==AdvertisingType::SERVER_ALARM;
+                scan_result.now_time = int(data.now)%86400;
+                if (int(scan_result.now_time)<0){
+                    scan_result.now_time = DaySeconds(int(scan_result.now_time)+86400);
+                }
+                scan_result.mac_hash = mac%0xffff;
+                scan_result.decoded_vbat = decode_battery_voltage(data.battery_voltage);
+                if (dev.haveRSSI()){
+                    int raw_rssi = dev.getRSSI();
+                    if (raw_rssi>127){
+                        scan_result.rssi = 127;
+                    }
+                    else if (raw_rssi<-128){
+                        scan_result.rssi = -128;
+                    }
+                    else {
+                        scan_result.rssi = static_cast<char>(raw_rssi);
+                    }
+                }
+                else {
+                    scan_result.rssi = -128;
+                }
+                active_alarm();
+                scanner_thisround_found = true;
+                return;
             }
-            else if (l_rssi<-127){
-                rssi = -127;
-            }
-            else {
-                rssi = l_rssi;
-            }
-            AdDeviceInfo info = {
-                true,
-                (data->type==AdvertisingType::SERVER_ALARM),
-                data->battery_voltage,
-                rssi,
-                mac_buf[4],
-                mac_buf[5]
-            };
-            info.time = data->now;
-            update_devs(info);
-            thisround_is_founded = true;
-            active_alarm();
         }
     }
 }
 
 void init_client_io(){
-
+    led(0);
+    pinMode(FWPIN_EN_DEV, OUTPUT);
+    if (!Wire.begin(FWPIN_IIC_SDA, FWPIN_IIC_SCL)){
+        log_e("init iic failed");
+        ESP_ERROR_CHECK(EXC_INIT_I2C_FAILED);
+    }
 }
 
 void init_client_devices(){
@@ -175,48 +107,140 @@ void init_client_devices(){
         ESP_ERROR_CHECK(EXC_INIT_OLED_FAILED);
     }
     btn_funct.attachDoubleClick(funct_doubleclick);
+    oled.clearDisplay();
+    oled.setTextColor(SSD1306_WHITE);
+    oled.setCursor(10,20);
+    oled.println("FuckerDetectorX");
+    oled.setCursor(10,oled.getCursorY());
+    oled.println("V: " STRINGIFY(FIRMWARE_VERSION));
+    oled.invertDisplay(true);
+    oled.display();
+    delay(3000);
+    oled.invertDisplay(false);
+    oled.clearDisplay();
+    oled.setCursor(0,0);
+    oled.println("LOADING...");
+    oled.display();
+    //oled.clearDisplay();
+    //oled.setCursor(0,0);
+    //oled.setTextColor(WHITE);
+    //oled.println("Test");
+    //oled.display();
 }
 
 void init_client_data(){
-    for (auto& i:devsrv_info){
-        i.valid = false;
-    }
-    devcli_info.valid = false;
-    log_i("create queue and mutex");
-    lock_ble = xSemaphoreCreateMutex();
-    lock_devlst = xSemaphoreCreateMutex();
-    lock_devcli = xSemaphoreCreateMutex();
-    mail_diupdate = xQueueCreate(2, sizeof(AdDeviceInfo));
+    memset(found_dev_lst, 0, sizeof(found_dev_lst));
 }
 
 void init_client_tasks(){
-    BaseType_t status;
-    auto errchk = [status](const char* task_name){
-        if (status!=pdPASS){
-            log_e("create task \"%s\" failed: %d", task_name, task_name);
-            ESP_ERROR_CHECK(EXC_CREATE_TASK_FAILED);
-        }
-        else {
-            log_i("task created: %s", task_name);
-        }
-    };
-    log_i("create task");
-    status = xTaskCreate(tf_alarm, "alarm", alarm_task_stack_size, NULL, 1, &th_alarm);
-    errchk("alarm");
-    status = xTaskCreate(tf_scanner, "scanner", scanner_task_stack_size, NULL, 1, &th_scanner);
-    errchk("scanner");
-    status = xTaskCreate(tf_ui, "ui", ui_task_stack_size, NULL, 1, &th_ui);
-    errchk("ui");
-    status = xTaskCreate(tf_diupdate, "diupdate", diupdate_task_stack_size, NULL, 1, &th_diupdate);
-    errchk("diupdate");
+    xTaskCreate(tf_buttonloop, "btnloop", buttonloop_task_stack_size, NULL, NULL, &task_buttonloop);
+    xTaskCreate(tf_alarmloop, "almloop", alarmloop_task_stack_size, NULL, NULL, &task_alarmloop);
 }
 
-void client_loop(){
-    btn_funct.tick();
+void update_ui(){
+    log_i("updating ui");
+    auto get_rssi_level_char = [](char rssi){
+        if      (rssi>-40){return '9';}
+        else if (rssi>-50){return '8';}
+        else if (rssi>-60){return '7';}
+        else if (rssi>-65){return '6';}
+        else if (rssi>-70){return '5';}
+        else if (rssi>-75){return '4';}
+        else if (rssi>-80){return '3';}
+        else if (rssi>-85){return '2';}
+        else if (rssi>-90){return '1';}
+        else return '0';
+    };
+    int cur = -1;
+    oled.clearDisplay();
+    oled.setCursor(0,0);
+    //oled.println("Test");
+    oled.printf("["STRINGIFY(FIRMWARE_VERSION)"] BAT:% 4.2fV\r\n", read_battery_voltage());
+    if (scanner_thisround_found){
+        int min = -1;
+        for (uint8_t i=0;i<found_dev_lst_size;i++){
+            AdvDeviceInfo& dev = found_dev_lst[i];
+            if (!dev.valid) continue;
+            if (scan_result.mac_hash==dev.mac_hash){
+                memcpy(&dev, &scan_result, sizeof(AdvDeviceInfo));
+                cur = i;
+                break;
+            }
+            else if (min==-1||(found_dev_lst+min)->now_time>dev.now_time){
+                min = i;
+            }
+        }
+        if (cur==-1){
+            min = (min==-1)?0:min;
+            memcpy(found_dev_lst+min, &scan_result, sizeof(AdvDeviceInfo));
+            cur = min;
+        }
+        scanner_thisround_found = false;
+    }
+    for (uint8_t i=0;i<found_dev_lst_size;i++){
+        AdvDeviceInfo& dev = found_dev_lst[i];
+        if (!dev.valid){
+            oled.println();
+            continue;
+        }
+        if (cur==i){
+            oled.setTextColor(SSD1306_BLACK,SSD1306_WHITE);
+        }
+        if (dev.is_server){
+            oled.printf("<%04x> %02hhu:%02hhu % 4.2fV %c", 
+                dev.mac_hash, 
+                dev.now_time.hours(), 
+                dev.now_time.minute(), 
+                dev.decoded_vbat, 
+                get_rssi_level_char(dev.rssi)
+            );
+        }
+        else {
+            oled.printf("<%04x>CLIENT % 4hhddBm",
+                dev.mac_hash,
+                dev.rssi
+            );
+        }
+        if (cur==i){
+            oled.setTextColor(SSD1306_WHITE,SSD1306_BLACK);
+        }
+        oled.println();
+    }
+    oled.display();
 }
 
 void funct_doubleclick(){
-    transmit_advertising(AdvertisingType::CLIENT_ALARM);
+    log_i("btn_funct dbclk");
+    thisloop_transmitadv = true;
+}
+
+void loop(){
+    if (thisloop_transmitadv){
+        log_i("transmitting adv");
+        led(1);
+        oled.clearDisplay();
+        oled.setCursor(5, 24);
+        oled.println("TRANSMITTING ALARM");
+        oled.display();
+        transmit_advertising(AdvertisingType::CLIENT_ALARM);
+        delay(500);
+        update_ui();
+        led(0);
+        dst_last_update_ui = 0;
+        scanner_thisround_found = false;
+        thisloop_transmitadv = false;
+    }
+    else {
+        p_blescan->start(1);
+        if (scanner_thisround_found||dst_last_update_ui>update_ui_max_dst){
+            dst_last_update_ui = 0;
+            update_ui();
+            scanner_thisround_found = false;
+        }
+        else {
+            dst_last_update_ui++;
+        }
+    }
 }
 
 #endif

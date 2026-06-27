@@ -255,9 +255,9 @@ void init_pub_devices(){
 
 #pragma endregion
 
-#if !FW_SERVER
-extern SemaphoreHandle_t lock_ble;
-#endif
+//#if !FW_SERVER
+//extern SemaphoreHandle_t lock_ble;
+//#endif
 
 void transmit_advertising(AdvertisingType type){
     AdvertisingData data;
@@ -267,9 +267,6 @@ void transmit_advertising(AdvertisingType type){
     data.now = get_dayseconds();
 #else
     data.now = 0;
-
-    p_blescan->stop();
-    xSemaphoreTake(lock_ble, portMAX_DELAY);
 #endif
 
     set_advertising_data(data);
@@ -277,9 +274,9 @@ void transmit_advertising(AdvertisingType type){
     delay(advertising_timeout);
     stop_advertising();
 
-#if !FW_SERVER
-    xSemaphoreGive(lock_ble);
-#endif
+//#if !FW_SERVER
+//xSemaphoreGive(lock_ble);
+//#endif
 }
 
 float read_battery_voltage_cached(){
